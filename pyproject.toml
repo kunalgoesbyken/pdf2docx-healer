@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pdf2docx-healer"
-version = "0.1.2"
+version = "0.1.3"
 description = "Formatting-preserving PDF-to-DOCX converter that fixes bullet lists, hyperlinks, CJK fonts, and scanned PDFs"
 readme = "README.md"
 license = "MIT"
