@@ -2,8 +2,8 @@
 
 [![PyPI version](https://img.shields.io/pypi/v/pdf2docx-healer.svg?logo=pypi&logoColor=white)](https://pypi.org/project/pdf2docx-healer/)
 [![Python versions](https://img.shields.io/pypi/pyversions/pdf2docx-healer.svg?logo=python&logoColor=white)](https://pypi.org/project/pdf2docx-healer/)
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/krockxz/pdf2docx-healer/blob/main/LICENSE)
-[![CI/CD](https://img.shields.io/github/actions/workflow/status/krockxz/pdf2docx-healer/publish.yml?logo=github&label=publish)](https://github.com/krockxz/pdf2docx-healer/actions)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/kunalgoesbyken/pdf2docx-healer/blob/main/LICENSE)
+[![CI/CD](https://img.shields.io/github/actions/workflow/status/kunalgoesbyken/pdf2docx-healer/publish.yml?logo=github&label=publish)](https://github.com/kunalgoesbyken/pdf2docx-healer/actions)
 
 **A drop-in replacement for `pdf2docx` that actually preserves your formatting.**
 
