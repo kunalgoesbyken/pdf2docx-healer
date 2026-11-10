@@ -1,50 +1,65 @@
 """Post-processing: list detection, hyperlinks, and font mapping on final DOCX."""
 
-from .list_detector import fix_lists_in_docx
+from dataclasses import dataclass, field
+from typing import Callable, List
+
+from .files import PathLike
 from .font_mapper import fix_docx_fonts
 from .link_injector import fix_docx_hyperlinks
+from .list_detector import fix_lists_in_docx
+from .log import logger
 
 
-def post_process_docx(docx_path, fix_lists=True, fix_hyperlinks=True,
-                      fix_fonts=True, aggressive_lists=False, verbose=False):
-    """Run all post-processing steps on a generated DOCX.
+@dataclass
+class PostProcessReport:
+    """Counts of fixes applied and the names of passes that failed."""
 
-    Args:
-        docx_path: Path to the DOCX file (modified in-place).
-        fix_lists: Apply list detection and Word list styles.
-        fix_hyperlinks: Wrap URL text in clickable hyperlinks.
-        fix_fonts: Apply CJK font fallback mapping.
-        aggressive_lists: Style even solo numbered paragraphs.
-        verbose: Print progress information.
+    lists_fixed: int = 0
+    hyperlinks_added: int = 0
+    fonts_fixed: int = 0
+    failed_passes: List[str] = field(default_factory=list)
 
-    Returns:
-        Dict with counts of fixes applied.
+
+def _run_pass(report: PostProcessReport, name: str, docx_path: PathLike,
+              action: Callable[[], int]) -> int:
+    try:
+        return action()
+    except Exception as exc:
+        report.failed_passes.append(name)
+        logger.warning("The %s pass failed and was skipped for %s: %s", name, docx_path, exc)
+        logger.debug("%s pass failure details", name, exc_info=True)
+        return 0
+
+
+def post_process_docx(
+    docx_path: PathLike,
+    fix_lists: bool = True,
+    fix_hyperlinks: bool = True,
+    fix_fonts: bool = True,
+    aggressive_lists: bool = False,
+    verbose: bool = False,
+) -> PostProcessReport:
+    """Run all post-processing passes on a generated DOCX, modifying it in place.
+
+    Each pass opens and saves the file on its own, so a failing pass leaves the
+    file as the previous pass left it. Failures are logged as warnings and listed
+    in the returned report instead of aborting the remaining passes.
     """
-    results = {'lists_fixed': 0, 'hyperlinks_added': 0, 'fonts_fixed': 0}
+    report = PostProcessReport()
 
     if fix_lists:
-        try:
-            results['lists_fixed'] = fix_lists_in_docx(
-                docx_path, aggressive=aggressive_lists, verbose=verbose
-            )
-        except Exception as e:
-            if verbose:
-                print(f"[healer] List fix error: {e}")
-
+        report.lists_fixed = _run_pass(
+            report, "lists", docx_path,
+            lambda: fix_lists_in_docx(docx_path, aggressive=aggressive_lists, verbose=verbose),
+        )
     if fix_hyperlinks:
-        try:
-            results['hyperlinks_added'] = fix_docx_hyperlinks(
-                docx_path, verbose=verbose
-            )
-        except Exception as e:
-            if verbose:
-                print(f"[healer] Hyperlink fix error: {e}")
-
+        report.hyperlinks_added = _run_pass(
+            report, "hyperlinks", docx_path,
+            lambda: fix_docx_hyperlinks(docx_path, verbose=verbose),
+        )
     if fix_fonts:
-        try:
-            results['fonts_fixed'] = fix_docx_fonts(docx_path, verbose=verbose)
-        except Exception as e:
-            if verbose:
-                print(f"[healer] Font fix error: {e}")
-
-    return results
+        report.fonts_fixed = _run_pass(
+            report, "fonts", docx_path,
+            lambda: fix_docx_fonts(docx_path, verbose=verbose),
+        )
+    return report

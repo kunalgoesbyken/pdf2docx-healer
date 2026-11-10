@@ -1,6 +1,19 @@
 """pdf2docx-healer: Formatting-preserving PDF-to-DOCX converter."""
 
-from .converter import heal, HealerConfig
+from .converter import HealerConfig, heal
+from .errors import (
+    HealerError,
+    IncompatiblePdf2docxError,
+    InvalidInputError,
+    OcrUnavailableError,
+)
 
-__version__ = "0.1.4"
-__all__ = ["heal", "HealerConfig"]
+__version__ = "0.2.0"
+__all__ = [
+    "heal",
+    "HealerConfig",
+    "HealerError",
+    "IncompatiblePdf2docxError",
+    "InvalidInputError",
+    "OcrUnavailableError",
+]

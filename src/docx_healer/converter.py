@@ -1,123 +1,136 @@
-"""Main ConverterHealer — orchestrates the 4-phase pipeline."""
+"""Orchestrates OCR, pdf2docx conversion, and DOCX post-processing."""
 
+import logging
 import os
-import json
 import tempfile
+from contextlib import contextmanager, nullcontext
 from dataclasses import dataclass
+from pathlib import Path
+from typing import ContextManager, Iterator, Optional
+
+from .errors import InvalidInputError
+from .files import PathLike, remove_quietly, resolve_input_pdf, resolve_output_path
+from .log import progress
+from .ocr_pipeline import prepare_ocr_copy
+from .patches import list_item_patches
+from .post_processor import post_process_docx
 
 
 @dataclass
 class HealerConfig:
     """Configuration for the pdf2docx-healer pipeline."""
-    # OCR settings
+
     ocr_enabled: bool = False
-    ocr_lang: str = 'eng'
+    ocr_lang: str = "eng"
     ocr_dpi: int = 300
     ocr_threshold: float = 0.3
-    
-    # Feature toggles
+
     fix_lists: bool = True
     fix_hyperlinks: bool = True
     fix_fonts: bool = True
-    
-    # List detection
+
     aggressive_lists: bool = False
-    
-    # Output
+
     verbose: bool = True
 
+    def __post_init__(self) -> None:
+        if not 0.0 <= self.ocr_threshold <= 1.0:
+            raise InvalidInputError(
+                f"ocr_threshold must be between 0 and 1, got {self.ocr_threshold}"
+            )
+        if self.ocr_dpi <= 0:
+            raise InvalidInputError(f"ocr_dpi must be positive, got {self.ocr_dpi}")
+        if not self.ocr_lang.strip():
+            raise InvalidInputError("ocr_lang must not be empty")
 
-def heal(pdf_path, docx_path=None, config=None):
-    """Convert PDF to DOCX preserving formatting (bullets, hyperlinks, fonts).
 
-    This is the main entry point running the 4-phase pipeline:
-    1. Pre-parse: OCR scanned PDFs if needed
-    2. Intercept: Monkey-patch pdf2docx for list detection
-    3. Convert: Run pdf2docx with patched internals
-    4. Post-process: List styles, hyperlinks, font mapping on final DOCX
+def heal(
+    pdf_path: PathLike,
+    docx_path: Optional[PathLike] = None,
+    config: Optional[HealerConfig] = None,
+) -> str:
+    """Convert a PDF to DOCX preserving formatting (bullets, hyperlinks, fonts).
+
+    Steps: optionally OCR scanned pages, convert with pdf2docx, then repair lists,
+    hyperlinks and fonts in the result. The output file is only written when every
+    step up to post-processing succeeded. Returns the output path.
+
+    Raises FileNotFoundError for a missing input and InvalidInputError for an
+    unusable input, output location, or configuration.
     """
-    if config is None:
-        config = HealerConfig()
-    
-    if docx_path is None:
-        docx_path = os.path.splitext(pdf_path)[0] + '.docx'
-    
-    verbose = config.verbose
-    
-    # === Phase 1: Pre-parse — OCR detection ===
-    actual_pdf = pdf_path
-    tmp_pdf = None
-    
-    if config.ocr_enabled:
-        from .ocr_pipeline import needs_ocr, ocr_pdf_file
-        import fitz
-        
-        src_doc = fitz.open(pdf_path)
-        try:
-            if needs_ocr(src_doc, threshold=config.ocr_threshold):
-                src_doc.close()
-                tmp_pdf = ocr_pdf_file(
-                    pdf_path,
-                    language=config.ocr_lang,
-                    dpi=config.ocr_dpi,
-                    verbose=verbose
-                )
-                actual_pdf = tmp_pdf
-            else:
-                src_doc.close()
-        except Exception as e:
-            if verbose:
-                print(f"[healer] OCR skipped: {e}")
-            try:
-                src_doc.close()
-            except Exception:
-                pass
-    
-    try:
-        # === Phase 2: Intercept — Apply monkey-patches ===
-        if config.fix_lists:
-            from .patches import apply_patches
-            apply_patches(verbose=verbose)
-        
-        # === Phase 3: Convert ===
-        _convert(actual_pdf, docx_path, verbose=verbose)
-        
-        # === Phase 4: Post-process ===
-        from .post_processor import post_process_docx
+    config = config or HealerConfig()
+    pdf = resolve_input_pdf(pdf_path)
+    output = resolve_output_path(docx_path, pdf)
+
+    with _source_pdf(pdf, config) as source, _staged_output(output) as staged:
+        _convert(source, staged, config)
         post_process_docx(
-            docx_path,
+            staged,
             fix_lists=config.fix_lists,
             fix_hyperlinks=config.fix_hyperlinks,
             fix_fonts=config.fix_fonts,
             aggressive_lists=config.aggressive_lists,
-            verbose=verbose,
+            verbose=config.verbose,
         )
-        
-        if verbose:
-            print(f"[healer] Done: {docx_path}")
-        
-        return docx_path
-    
-    finally:
-        if tmp_pdf and os.path.exists(tmp_pdf):
-            try:
-                os.unlink(tmp_pdf)
-            except OSError:
-                pass
+
+    progress(config.verbose, f"Done: {output}")
+    return str(output)
 
 
-def _convert(pdf_path, docx_path, verbose=False):
-    """Run pdf2docx conversion with default settings."""
-    if verbose:
-        print("[healer] Converting...")
-
-    from pdf2docx import Converter
-    if not verbose:
-        import logging
-        logging.getLogger().setLevel(logging.WARNING)
-
-    cv = Converter(pdf_path)
+@contextmanager
+def _source_pdf(pdf: Path, config: HealerConfig) -> Iterator[str]:
+    """Yield the PDF to convert; delete only the OCR copy this call created."""
+    ocr_copy = None
+    if config.ocr_enabled:
+        ocr_copy = prepare_ocr_copy(
+            pdf,
+            language=config.ocr_lang,
+            dpi=config.ocr_dpi,
+            threshold=config.ocr_threshold,
+            verbose=config.verbose,
+        )
     try:
-        cv.convert(docx_path)
+        yield ocr_copy or str(pdf)
     finally:
-        cv.close()
+        if ocr_copy is not None:
+            remove_quietly(ocr_copy)
+
+
+@contextmanager
+def _staged_output(output: Path) -> Iterator[str]:
+    """Yield a scratch DOCX beside ``output`` and move it into place on success."""
+    handle, name = tempfile.mkstemp(prefix=".docx_healer_", suffix=".docx", dir=output.parent)
+    os.close(handle)
+    try:
+        yield name
+        os.replace(name, output)
+    finally:
+        remove_quietly(name)
+
+
+@contextmanager
+def _root_log_level(level: Optional[int]) -> Iterator[None]:
+    if level is None:
+        yield
+        return
+    root = logging.getLogger()
+    previous = root.level
+    root.setLevel(level)
+    try:
+        yield
+    finally:
+        root.setLevel(previous)
+
+
+def _convert(pdf_path: str, docx_path: str, config: HealerConfig) -> None:
+    from pdf2docx import Converter
+
+    progress(config.verbose, "Converting...")
+    patches: ContextManager[None] = list_item_patches() if config.fix_lists else nullcontext()
+    quiet_level = None if config.verbose else logging.WARNING
+    with _root_log_level(quiet_level), patches:
+        converter = Converter(pdf_path)
+        try:
+            converter.convert(docx_path)
+        finally:
+            converter.close()
