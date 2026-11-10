@@ -47,5 +47,4 @@ CHAR_RANGE_FONT_MAP = [
     ((0x0590, 0x05FF), 'David'),
     ((0x0E00, 0x0E7F), 'Leelawadee UI'),
     ((0x0900, 0x097F), 'Mangal'),
-    ((0x0400, 0x04FF), 'Times New Roman'),
 ]

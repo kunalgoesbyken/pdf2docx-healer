@@ -1,165 +1,130 @@
-"""Hyperlink injection via python-docx post-processing (not store/restore)."""
+"""Hyperlink injection via python-docx post-processing."""
 
+import copy
 import re
-from docx.oxml.ns import qn
-from docx.oxml import OxmlElement
-from docx.opc.constants import RELATIONSHIP_TYPE as RT
-from lxml import etree
+from typing import Any, List, Optional, Tuple
 
-# URL pattern
+from docx import Document
+from docx.opc.constants import RELATIONSHIP_TYPE as RT
+from docx.oxml import OxmlElement
+from docx.oxml.ns import qn
+from docx.shared import RGBColor
+from docx.text.paragraph import Paragraph
+from docx.text.run import Run
+
+from .docx_walk import iter_all_paragraphs
+from .files import PathLike
+from .log import progress
+
 _URL_PATTERN = re.compile(
     r'https?://[^\s<>"\')\]]+|'
     r'ftp://[^\s<>"\')\]]+|'
     r'www\.[^\s<>"\')\]]+\.[a-zA-Z]{2,}[^\s<>"\')\]]*|'
     r'mailto:[^\s<>"\')\]]+',
-    re.IGNORECASE
+    re.IGNORECASE,
+)
+_TRAILING_PUNCTUATION = ".,;:!?"
+_HYPERLINK_BLUE = RGBColor(0x05, 0x63, 0xC1)
+_PLAIN_RUN_CHILDREN = frozenset(
+    qn(tag) for tag in ("w:rPr", "w:t", "w:tab", "w:cr", "w:noBreakHyphen")
 )
 
 
-def fix_docx_hyperlinks(docx_path, verbose=False):
-    """Post-process: find URL text in runs and wrap them in OOXML hyperlinks.
+def fix_docx_hyperlinks(docx_path: PathLike, verbose: bool = False) -> int:
+    """Wrap plain-text URLs in clickable hyperlinks, in place.
 
-    Opens the DOCX, scans all runs for URLs, and replaces plain-text URLs
-    with clickable hyperlinks in-place.
-
-    Returns number of hyperlinks added.
+    Covers body text, (nested) table cells, and headers/footers.
+    Returns the number of hyperlinks added.
     """
-    from docx import Document
-    doc = Document(docx_path)
-    count = 0
-
-    for paragraph in doc.paragraphs:
-        count += _hyperlink_urls_in_paragraph(paragraph)
-
+    doc = Document(str(docx_path))
+    count = sum(_hyperlink_urls_in_paragraph(p) for p in iter_all_paragraphs(doc))
     if count > 0:
-        doc.save(docx_path)
-        if verbose:
-            print(f"[healer] Added {count} hyperlink(s) in {docx_path}")
-
+        doc.save(str(docx_path))
+        progress(verbose, f"Added {count} hyperlink(s)")
     return count
 
 
-def _hyperlink_urls_in_paragraph(paragraph):
-    """Find URLs in paragraph runs and convert them to hyperlinks.
+def _url_spans(text: str) -> List[Tuple[int, int]]:
+    spans = []
+    for match in _URL_PATTERN.finditer(text):
+        end = match.start() + len(match.group().rstrip(_TRAILING_PUNCTUATION))
+        if end > match.start():
+            spans.append((match.start(), end))
+    return spans
 
-    Strategy: for each run containing URL(s), split the run into
-    text-before / hyperlink / text-after segments, processing ALL URLs
-    in the run (not just the first).
 
-    NOTE: This function modifies the paragraph XML tree by inserting and
-    removing elements.  python-docx's in-memory ``paragraph.runs`` view
-    is not refreshed after these changes, so the caller must not rely on
-    it being up-to-date.  Because we iterate over a snapshot (``list()``)
-    and save the document immediately afterwards, this is safe.
+def _target_url(url: str) -> str:
+    if "://" in url or url.lower().startswith("mailto:"):
+        return url
+    return "https://" + url
+
+
+def _is_plain_text_child(child: Any) -> bool:
+    if child.tag == qn("w:br"):
+        return child.get(qn("w:type")) in (None, "textWrapping")
+    return child.tag in _PLAIN_RUN_CHILDREN
+
+
+def _is_plain_text_run(run_element: Any) -> bool:
+    return all(_is_plain_text_child(child) for child in run_element)
+
+
+def _text_run(text: str, rpr: Optional[Any]) -> Any:
+    run = OxmlElement("w:r")
+    if rpr is not None:
+        run.append(copy.deepcopy(rpr))
+    run.text = text
+    return run
+
+
+def _hyperlink_urls_in_paragraph(paragraph: Paragraph) -> int:
+    """Replace URL text in the paragraph's direct runs with hyperlink elements.
+
+    Splits each run into text-before / hyperlink / text-after pieces, for every URL
+    in the run. Runs holding anything besides plain text are left untouched.
     """
-    count = 0
-    runs = list(paragraph.runs)
-
-    for run in runs:
-        if not run.text:
-            continue
-        urls = _URL_PATTERN.findall(run.text)
-        if not urls:
-            continue
-
-        # Check if run is already inside a hyperlink
-        if run._element.getparent() is not None:
-            parent_tag = run._element.getparent().tag
-            if parent_tag == qn('w:hyperlink'):
-                continue
-
-        run_elem = run._element
-        parent = run_elem.getparent()
-        orig_rPr = run_elem.find(qn('w:rPr'))
-        insert_pos = parent.index(run_elem)
-        parent.remove(run_elem)
-
-        remaining_text = run.text
-
-        for url_match in urls:
-            original_url = url_match
-            target_url = url_match
-            if '://' not in target_url and not target_url.startswith('mailto:'):
-                target_url = 'https://' + target_url
-
-            idx = remaining_text.find(original_url)
-            if idx < 0:
-                continue
-
-            before = remaining_text[:idx]
-            after = remaining_text[idx + len(original_url):]
-
-            if before:
-                before_run = OxmlElement('w:r')
-                if orig_rPr is not None:
-                    before_run.append(copy_rPr(orig_rPr))
-                before_run.text = before
-                parent.insert(insert_pos, before_run)
-                insert_pos += 1
-
-            hyperlink = _build_hyperlink(paragraph, target_url, run)
-            parent.insert(insert_pos, hyperlink)
-            hyperlink[0].text = original_url
-            insert_pos += 1
-            count += 1
-
-            remaining_text = after
-
-        if remaining_text:
-            after_run = OxmlElement('w:r')
-            if orig_rPr is not None:
-                after_run.append(copy_rPr(orig_rPr))
-            after_run.text = remaining_text
-            parent.insert(insert_pos, after_run)
-
-    return count
+    return sum(_hyperlink_urls_in_run(paragraph, run) for run in list(paragraph.runs))
 
 
-def _build_hyperlink(paragraph, url, source_run):
-    """Build an OOXML w:hyperlink element referencing an external URL."""
-    part = paragraph.part
-    r_id = part.relate_to(url, RT.HYPERLINK, is_external=True)
+def _hyperlink_urls_in_run(paragraph: Paragraph, run: Run) -> int:
+    text = run.text
+    spans = _url_spans(text)
+    if not spans or not _is_plain_text_run(run._element):
+        return 0
 
-    hyperlink = OxmlElement('w:hyperlink')
-    hyperlink.set(qn('r:id'), r_id)
+    run_element = run._element
+    parent = run_element.getparent()
+    if parent is None:
+        return 0
+    position = parent.index(run_element)
+    rpr = run_element.find(qn("w:rPr"))
 
-    # Build the run inside the hyperlink, copying formatting
-    hl_run = OxmlElement('w:r')
-    rPr = source_run._element.find(qn('w:rPr'))
-    if rPr is not None:
-        hl_run.append(copy_rPr(rPr))
+    pieces = []
+    cursor = 0
+    for start, end in spans:
+        if start > cursor:
+            pieces.append(_text_run(text[cursor:start], rpr))
+        pieces.append(_build_hyperlink(paragraph, text[start:end], rpr))
+        cursor = end
+    if cursor < len(text):
+        pieces.append(_text_run(text[cursor:], rpr))
 
-    # Add hyperlink style (blue + underline)
-    _ensure_hyperlink_style(hl_run)
+    parent.remove(run_element)
+    for offset, piece in enumerate(pieces):
+        parent.insert(position + offset, piece)
+    return len(spans)
 
-    hyperlink.append(hl_run)
+
+def _build_hyperlink(paragraph: Paragraph, url_text: str, rpr: Optional[Any]) -> Any:
+    relationship_id = paragraph.part.relate_to(
+        _target_url(url_text), RT.HYPERLINK, is_external=True
+    )
+    hyperlink = OxmlElement("w:hyperlink")
+    hyperlink.set(qn("r:id"), relationship_id)
+
+    link_run = _text_run(url_text, rpr)
+    hyperlink.append(link_run)
+    styled = Run(link_run, paragraph)
+    styled.font.underline = True
+    styled.font.color.rgb = _HYPERLINK_BLUE
     return hyperlink
-
-
-def _ensure_hyperlink_style(run_elem):
-    """Ensure the run inside a hyperlink has blue color and underline."""
-    rPr = run_elem.find(qn('w:rPr'))
-    if rPr is None:
-        rPr = OxmlElement('w:rPr')
-        run_elem.insert(0, rPr)
-
-    # Add underline if not present
-    if rPr.find(qn('w:u')) is None:
-        u = OxmlElement('w:u')
-        u.set(qn('w:val'), 'single')
-        rPr.append(u)
-
-    # Add blue color if not present
-    if rPr.find(qn('w:color')) is None:
-        color = OxmlElement('w:color')
-        color.set(qn('w:val'), '0563C1')
-        rPr.append(color)
-
-
-def copy_rPr(source_rPr):
-    """Deep copy a w:rPr element, with fallback if lxml serialisation fails."""
-    try:
-        return etree.fromstring(etree.tostring(source_rPr))
-    except Exception:
-        import copy
-        return copy.deepcopy(source_rPr)
