@@ -17,14 +17,15 @@ pdf2docx loses formatting: bullet lists become invisible borderless tables, hype
 - Produces pdf2docx-compatible rawdict, zero pipeline changes needed
 
 ### Phase 2: Intercept (patches.py)
-- Monkey-patch `pdf2docx.common.share.is_list_item` to actually detect bullets
-- Monkey-patch `pdf2docx.layout.Blocks.collect_stream_lines` to force `list_not_table=True`
+- Patch `pdf2docx.layout.Blocks.is_list_item` (the name bound inside the Blocks module) to actually detect bullets
+- Patch `pdf2docx.layout.Blocks.collect_stream_lines` to force `list_not_table=True`
+- Patches apply only for the duration of the conversion and fail loudly on incompatible pdf2docx versions
 
 ### Phase 3: Enrich (link_injector.py)
 - pdf2docx already extracts hyperlinks via shape pipeline
 - Supplement: scan store() JSON for missed URL patterns in spans
 
-### Phase 4: Post-process (post_processor.py, numbering.py)
+### Phase 4: Post-process (post_processor.py)
 - Open .docx with python-docx
 - Detect list paragraphs by bullet/number prefix
 - Apply Word list styles (built-in or custom OOXML numbering)
@@ -32,7 +33,7 @@ pdf2docx loses formatting: bullet lists become invisible borderless tables, hype
 - Normalize indentation from pdf2docx coordinate calculations
 
 ## Dependencies
-- pdf2docx >= 0.5.0
+- pdf2docx >= 0.5.9, < 0.6
 - PyMuPDF >= 1.23.0
 - python-docx >= 0.8.11
 - lxml (included with python-docx)
