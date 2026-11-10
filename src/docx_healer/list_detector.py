@@ -1,20 +1,17 @@
 """Post-conversion list detection and Word style application."""
 
-import re
 import copy
+import re
+from typing import Any, List, Tuple
+
 from docx import Document
-from docx.shared import Pt, Cm, Emu
-from docx.oxml.ns import qn
 from docx.oxml import OxmlElement
-from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.oxml.ns import qn
 from docx.text.paragraph import Paragraph
 
 from .constants import BULLET_CODEPOINTS
+from .log import logger, progress
 
-
-# ---------------------------------------------------------------------------
-# Text normalization
-# ---------------------------------------------------------------------------
 
 def _normalize_text(text):
     """Fix double-encoded UTF-8 characters common in pdf2docx output."""
@@ -29,12 +26,10 @@ def _normalize_text(text):
         return text
 
 
-# ---------------------------------------------------------------------------
-# Regex patterns
-# ---------------------------------------------------------------------------
-
 _UNICODE_BULLETS = ''.join(chr(cp) for cp in sorted(BULLET_CODEPOINTS) if cp > 0x7F)
-_ASCII_BULLETS   = r'\-\*\>\+\~' + ''.join(chr(cp) for cp in sorted(BULLET_CODEPOINTS) if cp <= 0x7F)
+_ASCII_BULLETS   = r'\-\*\>\+\~' + ''.join(
+    chr(cp) for cp in sorted(BULLET_CODEPOINTS) if cp <= 0x7F
+)
 _ALL_BULLETS     = _UNICODE_BULLETS + _ASCII_BULLETS
 
 _BULLET_LINE_START = re.compile(
@@ -66,13 +61,12 @@ _NUMBERED_ANYWHERE = re.compile(
 # Extract just the numeric value from a prefix for sequential checks
 _NUMERIC_EXTRACT = re.compile(r'^\[?\(?(\d+|[a-zA-Z]|[ivxlcdm]+)')
 
-_BULLET_STYLES  = {0:'List Bullet', 1:'List Bullet 2', 2:'List Bullet 3', 3:'List Bullet 4', 4:'List Bullet 5'}
-_NUMBER_STYLES  = {0:'List Number', 1:'List Number 2', 2:'List Number 3', 3:'List Number 4', 4:'List Number 5'}
+_BULLET_STYLES = {0: 'List Bullet', **{i: f'List Bullet {i + 1}' for i in range(1, 5)}}
+_NUMBER_STYLES = {0: 'List Number', **{i: f'List Number {i + 1}' for i in range(1, 5)}}
+_NUMBERING_LEVELS = 9
+_INDENT_TWIPS = 720
+_HANGING_TWIPS = 360
 
-
-# ---------------------------------------------------------------------------
-# Number format detection (Issue 1)
-# ---------------------------------------------------------------------------
 
 def detect_number_format(prefix):
     """Detect OOXML numFmt from a list prefix string.
@@ -105,10 +99,6 @@ def detect_number_format(prefix):
     return 'decimal'
 
 
-# ---------------------------------------------------------------------------
-# Prefix detection
-# ---------------------------------------------------------------------------
-
 def detect_list_prefix(text):
     """Detect if paragraph text starts with a list prefix."""
     text = _normalize_text(text)
@@ -125,10 +115,6 @@ def detect_list_prefix(text):
 
     return None, None, text, 0
 
-
-# ---------------------------------------------------------------------------
-# Paragraph splitting (merged multi-item paragraphs)
-# ---------------------------------------------------------------------------
 
 def split_merged_list_paragraph(text):
     """Split text containing multiple list items into individual items."""
@@ -168,14 +154,12 @@ def _find_next_boundary(text, start):
     candidates = []
     bm = _BULLET_ANYWHERE.search(rest)
     nm = _NUMBERED_ANYWHERE.search(rest)
-    if bm: candidates.append(start + bm.start())
-    if nm: candidates.append(start + nm.start())
+    if bm:
+        candidates.append(start + bm.start())
+    if nm:
+        candidates.append(start + nm.start())
     return min(candidates) if candidates else len(text)
 
-
-# ---------------------------------------------------------------------------
-# Indentation level
-# ---------------------------------------------------------------------------
 
 def detect_indent_level(paragraph, base_left_margin=None):
     """Detect list indentation level from paragraph left indent in points."""
@@ -191,16 +175,16 @@ def detect_indent_level(paragraph, base_left_margin=None):
         return 0
 
     delta = left_pt - (base_left_margin or 0)
-    if delta < 18:    return 0
-    elif delta < 54:  return 1
-    elif delta < 90:  return 2
-    elif delta < 126: return 3
-    else:             return min(4, int(delta / 36))
+    if delta < 18:
+        return 0
+    if delta < 54:
+        return 1
+    if delta < 90:
+        return 2
+    if delta < 126:
+        return 3
+    return min(4, int(delta / 36))
 
-
-# ---------------------------------------------------------------------------
-# Header detection heuristic
-# ---------------------------------------------------------------------------
 
 def _is_likely_header(prefix_str, item_text):
     """Heuristic: is this numbered line likely a section header, not a list item?
@@ -272,10 +256,6 @@ def _sequential_reset(group):
     return False
 
 
-# ---------------------------------------------------------------------------
-# Apply list style
-# ---------------------------------------------------------------------------
-
 def apply_builtin_list_style(paragraph, list_type, level=0, num_fmt=None, _num_id=None):
     """Apply a built-in Word list style to a paragraph.
 
@@ -304,79 +284,78 @@ def _apply_list_via_xml(paragraph, list_type, level=0, num_fmt=None, _num_id=Non
     If _num_id is provided, reuses the existing numbering definition.
     Returns the num_id for reuse by subsequent items.
     """
-    try:
-        numbering_part = paragraph.part.numbering_part
-    except AttributeError:
-        return None
-    numbering_elm = numbering_part.element
+    numbering_elm = paragraph.part.numbering_part.element
+    num_id = _num_id if _num_id is not None else _add_numbering(numbering_elm, list_type, num_fmt)
 
-    if _num_id is not None:
-        num_id = _num_id
-    else:
-        abs_num_id = _get_next_id(numbering_elm, 'w:abstractNum', 'w:abstractNumId')
-        num_id = _get_next_id(numbering_elm, 'w:num', 'w:numId')
-
-        import random
-        nsid_val = ''.join(random.choice('0123456789ABCDEF') for _ in range(8))
-
-        abs_num = OxmlElement('w:abstractNum')
-        abs_num.set(qn('w:abstractNumId'), str(abs_num_id))
-        _mk_child(abs_num, 'w:nsid', nsid_val)
-        _mk_child(abs_num, 'w:multiLevelType', 'hybridMultilevel')
-        _mk_child(abs_num, 'w:tmpl', nsid_val)
-
-        lvl = OxmlElement('w:lvl')
-        lvl.set(qn('w:ilvl'), str(level))
-        lvl.set(qn('w:tplc'), str(level))
-        _mk_child(lvl, 'w:start', '1')
-
-        if list_type == 'bullet':
-            _mk_child(lvl, 'w:numFmt', 'bullet')
-            _mk_child(lvl, 'w:lvlText', '\u2022')
-            rPr = OxmlElement('w:rPr')
-            rFonts = OxmlElement('w:rFonts')
-            rFonts.set(qn('w:ascii'), 'Symbol')
-            rFonts.set(qn('w:hAnsi'), 'Symbol')
-            rFonts.set(qn('w:hint'), 'default')
-            rPr.append(rFonts)
-            lvl.append(rPr)
-        else:
-            fmt = num_fmt or 'decimal'
-            _mk_child(lvl, 'w:numFmt', fmt)
-            _mk_child(lvl, 'w:lvlText', '%1.')
-
-        _mk_child(lvl, 'w:lvlJc', 'left')
-        pPr_lvl = OxmlElement('w:pPr')
-        ind = OxmlElement('w:ind')
-        ind.set(qn('w:left'), str(720 * (level + 1)))
-        ind.set(qn('w:hanging'), '360')
-        pPr_lvl.append(ind)
-        lvl.append(pPr_lvl)
-        abs_num.append(lvl)
-        numbering_elm.append(abs_num)
-
-        num = OxmlElement('w:num')
-        num.set(qn('w:numId'), str(num_id))
-        abs_ref = OxmlElement('w:abstractNumId')
-        abs_ref.set(qn('w:val'), str(abs_num_id))
-        num.append(abs_ref)
-        numbering_elm.append(num)
-
-    pPr_para = paragraph._element.get_or_add_pPr()
-    for existing in pPr_para.findall(qn('w:numPr')):
-        pPr_para.remove(existing)
-
-    numPr = OxmlElement('w:numPr')
-    _mk_child(numPr, 'w:ilvl', str(level))
-    _mk_child(numPr, 'w:numId', str(num_id))
-
-    pStyle = pPr_para.find(qn('w:pStyle'))
-    if pStyle is not None:
-        pStyle.addnext(numPr)
-    else:
-        pPr_para.insert(0, numPr)
-
+    pPr = paragraph._element.get_or_add_pPr()
+    pPr._remove_numPr()
+    numPr = pPr.get_or_add_numPr()
+    numPr.get_or_add_ilvl().val = level
+    numPr.get_or_add_numId().val = num_id
     return num_id
+
+
+def _add_numbering(numbering_elm, list_type, num_fmt):
+    abs_num_id = _get_next_id(numbering_elm, 'w:abstractNum', 'w:abstractNumId')
+    num_id = _get_next_id(numbering_elm, 'w:num', 'w:numId')
+    _insert_abstract_num(numbering_elm, _build_abstract_num(abs_num_id, list_type, num_fmt))
+
+    num = OxmlElement('w:num')
+    num.set(qn('w:numId'), str(num_id))
+    _mk_child(num, 'w:abstractNumId', abs_num_id)
+    numbering_elm.append(num)
+    return num_id
+
+
+def _insert_abstract_num(numbering_elm, abs_num):
+    first_num = numbering_elm.find(qn('w:num'))
+    if first_num is None:
+        numbering_elm.append(abs_num)
+    else:
+        first_num.addprevious(abs_num)
+
+
+def _build_abstract_num(abs_num_id, list_type, num_fmt):
+    abs_num = OxmlElement('w:abstractNum')
+    abs_num.set(qn('w:abstractNumId'), str(abs_num_id))
+    nsid = f'{abs_num_id + 1:08X}'
+    _mk_child(abs_num, 'w:nsid', nsid)
+    _mk_child(abs_num, 'w:multiLevelType', 'hybridMultilevel')
+    _mk_child(abs_num, 'w:tmpl', nsid)
+    for level in range(_NUMBERING_LEVELS):
+        abs_num.append(_build_level(level, list_type, num_fmt or 'decimal'))
+    return abs_num
+
+
+def _build_level(level, list_type, num_fmt):
+    lvl = OxmlElement('w:lvl')
+    lvl.set(qn('w:ilvl'), str(level))
+    lvl.set(qn('w:tplc'), str(level))
+    _mk_child(lvl, 'w:start', 1)
+    if list_type == 'bullet':
+        _mk_child(lvl, 'w:numFmt', 'bullet')
+        _mk_child(lvl, 'w:lvlText', '')
+    else:
+        _mk_child(lvl, 'w:numFmt', num_fmt)
+        _mk_child(lvl, 'w:lvlText', f'%{level + 1}.')
+    _mk_child(lvl, 'w:lvlJc', 'left')
+
+    pPr = OxmlElement('w:pPr')
+    ind = OxmlElement('w:ind')
+    ind.set(qn('w:left'), str(_INDENT_TWIPS * (level + 1)))
+    ind.set(qn('w:hanging'), str(_HANGING_TWIPS))
+    pPr.append(ind)
+    lvl.append(pPr)
+
+    if list_type == 'bullet':
+        rPr = OxmlElement('w:rPr')
+        rFonts = OxmlElement('w:rFonts')
+        for attribute in ('w:ascii', 'w:hAnsi'):
+            rFonts.set(qn(attribute), 'Symbol')
+        rFonts.set(qn('w:hint'), 'default')
+        rPr.append(rFonts)
+        lvl.append(rPr)
+    return lvl
 
 
 def _mk_child(parent, tag, val):
@@ -387,20 +366,13 @@ def _mk_child(parent, tag, val):
 
 
 def _get_next_id(numbering_elm, element_xpath, attr_name):
-    # python-docx's BaseOxmlElement.xpath() accepts only the expression string
-    # (no namespaces kwarg) and internally uses nsmap for w: prefix resolution.
-    expr = f'./{element_xpath}/@{attr_name}'
-    ids = numbering_elm.xpath(expr)
+    ids = numbering_elm.xpath(f'./{element_xpath}/@{attr_name}')
     if not ids:
         return 0 if 'abstractNum' in element_xpath else 1
     return max(int(i) for i in ids) + 1
 
 
-# ---------------------------------------------------------------------------
-# Paragraph splitting into individual items
-# ---------------------------------------------------------------------------
-
-def _split_paragraph_at_list_items(paragraph, docx_element):
+def _split_paragraph_at_list_items(paragraph):
     """Split a merged paragraph into individual list-item and non-list paragraphs.
 
     Handles text like "Normal text\\n• item 1\\n• item 2\\nMore normal text"
@@ -415,7 +387,7 @@ def _split_paragraph_at_list_items(paragraph, docx_element):
 
     # Build a complete segment list: (type, text) where type is 'bullet',
     # 'number', or 'normal'
-    segments = []
+    segments: List[Tuple[Any, ...]] = []
     prev_end = 0
     for ptype, prefix, item_text, start, end in items:
         if start > prev_end:
@@ -447,7 +419,6 @@ def _split_paragraph_at_list_items(paragraph, docx_element):
     insert_idx = 0
     for seg_idx, seg in enumerate(segments):
         if seg_idx == 0:
-            target_elem = base_elem
             if seg[0] == 'normal':
                 _replace_paragraph_text(paragraph, seg[1])
                 results.append((paragraph, 'normal', '', seg[1]))
@@ -481,17 +452,13 @@ def _remove_numPr(p_elem):
             pPr.remove(numPr)
 
 
-# ---------------------------------------------------------------------------
-# Main list-fixing entry point
-# ---------------------------------------------------------------------------
-
 def fix_lists_in_docx(docx_path, aggressive=False, verbose=False):
     """Open a DOCX, detect list paragraphs, and apply proper Word list styles.
 
     Uses sequential-number checking and header heuristics to avoid styling
     section headers (like "4. Numbered List") as list items.
     """
-    doc = Document(docx_path)
+    doc = Document(str(docx_path))
     paragraphs = list(doc.paragraphs)
     fixed_count = 0
 
@@ -515,7 +482,7 @@ def fix_lists_in_docx(docx_path, aggressive=False, verbose=False):
         group = []  # [(paragraph, list_type, prefix, item_text, orig_index)]
 
         # Always split (even for 1 item) to preserve surrounding non-list text
-        split_results = _split_paragraph_at_list_items(p, doc.element)
+        split_results = _split_paragraph_at_list_items(p)
         paragraphs = list(doc.paragraphs)
         if split_results:
             for sp in split_results:
@@ -547,7 +514,7 @@ def fix_lists_in_docx(docx_path, aggressive=False, verbose=False):
                 ptype, prefix, item_text, _, _ = next_items[0]
                 group.append((next_p, ptype, prefix, item_text, i))
             else:
-                split_results = _split_paragraph_at_list_items(next_p, doc.element)
+                split_results = _split_paragraph_at_list_items(next_p)
                 paragraphs = list(doc.paragraphs)
                 for sp in split_results:
                     group.append((sp[0], sp[1], sp[2], sp[3], i))
@@ -560,7 +527,7 @@ def fix_lists_in_docx(docx_path, aggressive=False, verbose=False):
             _num_id_cache = None
 
             if should_style:
-                for para, ptype, prefix, item_text, orig_idx in group:
+                for para, ptype, prefix, item_text, _ in group:
                     if ptype == 'normal':
                         continue
                     level = detect_indent_level(para)
@@ -572,17 +539,16 @@ def fix_lists_in_docx(docx_path, aggressive=False, verbose=False):
                     )
                     fixed_count += 1
             else:
-                for para, ptype, prefix, item_text, orig_idx in group:
+                for para, ptype, prefix, item_text, _ in group:
                     if ptype == 'normal':
                         continue
                     current = para.text.strip()
                     expected = (prefix + ' ' + item_text).strip()
                     if current != expected:
                         _replace_paragraph_text(para, expected)
-        except Exception:
-            if verbose:
-                import traceback
-                traceback.print_exc()
+        except Exception as exc:
+            logger.warning("Skipping a list group that could not be styled: %s", exc)
+            logger.debug("List group failure details", exc_info=True)
             continue
 
     # ── Cleanup pass: remove list styling from falsely-detected headers ──
@@ -593,8 +559,7 @@ def fix_lists_in_docx(docx_path, aggressive=False, verbose=False):
 
     if fixed_count > 0:
         doc.save(docx_path)
-        if verbose:
-            print(f"[healer] Fixed {fixed_count} list items in {docx_path}")
+        progress(verbose, f"Fixed {fixed_count} list items")
 
     return fixed_count
 
@@ -608,9 +573,6 @@ def _cleanup_falsely_styled_headers(doc):
     non-list content). This is very conservative to avoid removing real
     list items.
     """
-    from docx.oxml.ns import qn
-    NS = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'
-    W = '{%s}' % NS
     count = 0
 
     paragraphs = list(doc.paragraphs)
@@ -620,8 +582,8 @@ def _cleanup_falsely_styled_headers(doc):
             continue
 
         # Must NOT have numPr (real list items from our patch have numPr)
-        pPr = p._element.find(W + 'pPr')
-        if pPr is not None and pPr.find(W + 'numPr') is not None:
+        pPr = p._element.find(qn('w:pPr'))
+        if pPr is not None and pPr.find(qn('w:numPr')) is not None:
             continue
 
         text = _normalize_text(p.text).strip()
@@ -664,7 +626,7 @@ def _cleanup_falsely_styled_headers(doc):
         # All checks passed — this is a trailing header, reset to Normal
         p.style = doc.styles['Normal']
         if pPr is not None:
-            for numPr in pPr.findall(W + 'numPr'):
+            for numPr in pPr.findall(qn('w:numPr')):
                 pPr.remove(numPr)
         count += 1
 
@@ -679,10 +641,6 @@ def _split_list_paragraphs_with_normal_lines(doc):
     where the text after \\n doesn't look like a list item, and splits it into
     a separate Normal paragraph.
     """
-    import copy
-    from docx.oxml.ns import qn
-    NS = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'
-    W = '{%s}' % NS
     count = 0
 
     for p in list(doc.paragraphs):
@@ -714,17 +672,16 @@ def _split_list_paragraphs_with_normal_lines(doc):
         # Create a new Normal paragraph for the remaining text
         new_p = copy.deepcopy(p_elem)
         # Remove list style and numPr from the new paragraph
-        new_pPr = new_p.find(W + 'pPr')
+        new_pPr = new_p.find(qn('w:pPr'))
         if new_pPr is not None:
-            for pStyle in new_pPr.findall(W + 'pStyle'):
+            for pStyle in new_pPr.findall(qn('w:pStyle')):
                 new_pPr.remove(pStyle)
-            for numPr in new_pPr.findall(W + 'numPr'):
+            for numPr in new_pPr.findall(qn('w:numPr')):
                 new_pPr.remove(numPr)
         # Insert after original
         p_elem.addnext(new_p)
         # Set text on new paragraph
-        from docx.text.paragraph import Paragraph
-        new_para = Paragraph(new_p, p._element.getparent())
+        new_para = Paragraph(new_p, p._parent)
         _replace_paragraph_text(new_para, remaining)
         count += 1
 
@@ -760,10 +717,6 @@ def _should_style_group(group, list_type, aggressive):
 
     return True
 
-
-# ---------------------------------------------------------------------------
-# Text manipulation helpers
-# ---------------------------------------------------------------------------
 
 def _replace_paragraph_text(paragraph, new_text):
     """Replace paragraph text preserving formatting and hyperlinks from the first run.
