@@ -1,5 +1,6 @@
 import zipfile
 
+import pytest
 from docx import Document
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
@@ -143,3 +144,80 @@ def test_file_is_untouched_when_nothing_matches(tmp_path):
 
     assert fix_docx_hyperlinks(path) == 0
     assert path.read_bytes() == before
+
+
+def _linked(tmp_path, text):
+    path = make_docx(tmp_path / "a.docx", lambda doc: doc.add_paragraph(text))
+    count = fix_docx_hyperlinks(path)
+    return count, body_hyperlinks(path)
+
+
+@pytest.mark.parametrize(
+    "text, expected",
+    [
+        ("contact ops@example.com now", [("ops@example.com", "mailto:ops@example.com")]),
+        ("mail ops@example.com.", [("ops@example.com", "mailto:ops@example.com")]),
+        ("(ops@example.com), or", [("ops@example.com", "mailto:ops@example.com")]),
+        ("<ops@example.com>", [("ops@example.com", "mailto:ops@example.com")]),
+        ("Ops@Example.COM", [("Ops@Example.COM", "mailto:Ops@Example.COM")]),
+        ("a.b+tag@mail.example.co.uk!", [("a.b+tag@mail.example.co.uk", "mailto:a.b+tag@mail.example.co.uk")]),
+        (
+            "one@a.org and two@b.org",
+            [("one@a.org", "mailto:one@a.org"), ("two@b.org", "mailto:two@b.org")],
+        ),
+    ],
+)
+def test_plain_email_addresses_become_mailto_links(tmp_path, text, expected):
+    count, found = _linked(tmp_path, text)
+
+    assert found == expected
+    assert count == len(expected)
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "ping @handle about it",
+        "user@localhost is a dev host",
+        "install pkg@1.2.3 first",
+        "git clone git@github.com:org/repo.git",
+        "price @ 5.00 each",
+        "name@ example.com",
+        "x@y.z",
+        "@scope/pkg@latest",
+        "a@b@c.com",
+        "trailing dots ops..@example.com",
+    ],
+)
+def test_text_that_only_looks_like_an_email_is_not_linked(tmp_path, text):
+    count, found = _linked(tmp_path, text)
+
+    assert (count, found) == (0, [])
+
+
+def test_email_inside_a_url_is_not_linked_twice(tmp_path):
+    count, found = _linked(tmp_path, "see https://example.com/u/ops@example.com and https://user@host.example.com/x")
+
+    assert [target for _, target in found] == [
+        "https://example.com/u/ops@example.com",
+        "https://user@host.example.com/x",
+    ]
+    assert count == 2
+
+
+def test_explicit_mailto_is_linked_once(tmp_path):
+    count, found = _linked(tmp_path, "write mailto:ops@example.com today")
+
+    assert found == [("mailto:ops@example.com", "mailto:ops@example.com")]
+    assert count == 1
+
+
+def test_email_in_a_table_cell_is_linked(tmp_path):
+    def build(doc):
+        table = doc.add_table(rows=1, cols=1)
+        table.cell(0, 0).paragraphs[0].text = "ops@example.com"
+
+    path = make_docx(tmp_path / "a.docx", build)
+
+    assert fix_docx_hyperlinks(path) == 1
+    assert body_hyperlinks(path) == [("ops@example.com", "mailto:ops@example.com")]
