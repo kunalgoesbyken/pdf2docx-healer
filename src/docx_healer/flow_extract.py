@@ -517,33 +517,37 @@ def _overlap_length(low_a: float, high_a: float, low_b: float, high_b: float) ->
     return min(high_a, high_b) - max(low_a, low_b)
 
 
-def _adjacent(a: Any, b: Any) -> bool:
+def _adjacent(a: Rect, b: Rect) -> bool:
     """True when two clusters are stacked or side by side, aligned and close together."""
-    across = _overlap_length(a.x0, a.x1, b.x0, b.x1)
-    down = _overlap_length(a.y0, a.y1, b.y0, b.y1)
-    stacked = across >= _FIGURE_ALIGN_SHARE * min(a.width, b.width)
-    beside = down >= _FIGURE_ALIGN_SHARE * min(a.height, b.height)
-    if stacked and -down <= _FIGURE_GAP_SHARE * min(a.height, b.height):
-        return True
-    return beside and -across <= _FIGURE_GAP_SHARE * min(a.width, b.width)
+    across = _overlap_length(a[0], a[2], b[0], b[2])
+    down = _overlap_length(a[1], a[3], b[1], b[3])
+    narrow = min(a[2] - a[0], b[2] - b[0])
+    short = min(a[3] - a[1], b[3] - b[1])
+    stacked = across >= _FIGURE_ALIGN_SHARE * narrow and -down <= _FIGURE_GAP_SHARE * short
+    beside = down >= _FIGURE_ALIGN_SHARE * short and -across <= _FIGURE_GAP_SHARE * narrow
+    return stacked or beside
 
 
 def _merge_clusters(clusters: List[Any]) -> List[Any]:
     """Join the clusters of one multi-part figure, such as stacked subplots, into one."""
-    merged = [pymupdf.Rect(c) for c in clusters]
+    boxes: List[Rect] = [(c.x0, c.y0, c.x1, c.y1) for c in clusters]
     changed = True
     while changed:
         changed = False
-        for first in range(len(merged)):
-            for second in range(first + 1, len(merged)):
-                if _adjacent(merged[first], merged[second]):
-                    merged[first] = merged[first] | merged[second]
-                    del merged[second]
+        joined: List[Rect] = []
+        for box in boxes:
+            for index, other in enumerate(joined):
+                if _adjacent(box, other):
+                    joined[index] = (
+                        min(box[0], other[0]), min(box[1], other[1]),
+                        max(box[2], other[2]), max(box[3], other[3]),
+                    )
                     changed = True
                     break
-            if changed:
-                break
-    return sorted(merged, key=lambda r: (r.y0, r.x0))
+            else:
+                joined.append(box)
+        boxes = joined
+    return [pymupdf.Rect(*box) for box in sorted(boxes, key=lambda b: (b[1], b[0]))]
 
 
 def _curved(item: Any) -> bool:

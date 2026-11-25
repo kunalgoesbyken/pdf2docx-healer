@@ -310,7 +310,7 @@ def _marker_starts(
     starts = any(interp in _START_TOKENS for interp in marker.interps)
     if cur.marker is not None and not cur.marker.bullet:
         return starts or cur.marker.delim == marker.delim or next_in_chain(cur.marker, marker)
-    if _TERMINAL.search(cur.last_line_text.rstrip()) is None:
+    if marker.path or _TERMINAL.search(cur.last_line_text.rstrip()) is None:
         return False
     return starts or _sibling_follows(marker, line, upcoming())
 

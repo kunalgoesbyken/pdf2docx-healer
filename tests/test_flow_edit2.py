@@ -483,3 +483,14 @@ def test_internal_link_into_a_table_cell_gets_a_bookmark_in_the_cell(tmp_path):
         b.get(qn("w:name")) for tc in xml.iter(qn("w:tc")) for b in tc.iter(qn("w:bookmarkStart"))
     ]
     assert len(anchors) == 1 and anchors == cell_marks
+
+
+def test_a_wrapped_line_that_starts_with_a_decimal_number_stays_in_its_paragraph(tmp_path):
+    def build(doc):
+        page = new_page(doc)
+        put(page, LEFT, 100, "The survey counted the people living in the north region.")
+        put(page, LEFT, 112, "1.1 million people were found there across the last year.")
+
+    out = convert(tmp_path, build)
+
+    assert len(texts(out)) == 1
