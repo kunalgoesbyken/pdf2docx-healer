@@ -3,20 +3,21 @@
 import logging
 import os
 import tempfile
-from contextlib import contextmanager, nullcontext
+from contextlib import ExitStack, contextmanager
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, ContextManager, Iterator, Optional
+from typing import Any, Iterator, Optional
 
 from .errors import InvalidInputError
 from .files import PathLike, remove_quietly, resolve_input_pdf, resolve_output_path
 from .flow_writer import write_editable_docx
+from .layout_tables import layout_table_filter
 from .log import progress
 from .ocr_pipeline import prepare_ocr_copy
 from .page_recovery import convert_with_recovery
-from .patches import list_item_patches
+from .patches import keep_word_spaces, list_item_patches
 from .post_processor import post_process_docx
-from .speedups import cached_image_listing
+from .speedups import cached_image_listing, cached_table_cells
 
 MODES = ("fidelity", "editable")
 
@@ -36,6 +37,7 @@ class HealerConfig:
     fix_headings: bool = True
     fix_internal_links: bool = True
     recover_pages: bool = True
+    fix_tables: bool = True
 
     mode: str = "fidelity"
 
@@ -153,10 +155,16 @@ def _convert(pdf_path: str, docx_path: str, config: HealerConfig) -> None:
     from pdf2docx import Converter
 
     progress(config.verbose, "Converting...")
-    patches: ContextManager[None] = list_item_patches() if config.fix_lists else nullcontext()
     own_progress = config.recover_pages
     quiet_level = None if config.verbose and not own_progress else logging.WARNING
-    with _root_log_level(quiet_level), patches, cached_image_listing():
+    with _root_log_level(quiet_level), ExitStack() as patches:
+        if config.fix_lists:
+            patches.enter_context(list_item_patches())
+        if config.fix_tables:
+            patches.enter_context(layout_table_filter())
+        patches.enter_context(keep_word_spaces())
+        patches.enter_context(cached_image_listing())
+        patches.enter_context(cached_table_cells())
         converter = Converter(pdf_path)
         try:
             _require_readable(converter, pdf_path)

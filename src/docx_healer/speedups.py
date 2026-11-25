@@ -1,15 +1,18 @@
-"""Scoped speedups for pdf2docx internals that leave its output unchanged."""
+"""Scoped speedups for pdf2docx and python-docx internals that leave the output unchanged."""
 
 import functools
 import importlib
 import threading
 from contextlib import contextmanager
-from typing import Any, Callable, Dict, Iterator, Tuple
+from typing import Any, Callable, Dict, Iterator, Optional, Tuple
 
 from .log import logger
 
 _EXTRACTOR_MODULE = "pdf2docx.image.ImagesExtractor"
 _HIDE_METHOD = "_hide_page_text_and_images"
+_TABLE_MODULE = "docx.table"
+_CELLS = "_cells"
+_CELLS_CACHE = "_docx_healer_cells"
 _LOCK = threading.RLock()
 
 
@@ -69,3 +72,58 @@ def cached_image_listing() -> Iterator[None]:
             yield
         finally:
             setattr(extractor, _HIDE_METHOD, original)
+
+
+def _resolve_table_types() -> Optional[Tuple[Any, Any]]:
+    try:
+        module = importlib.import_module(_TABLE_MODULE)
+        table_class, cell_class = module.Table, module._Cell
+    except (ImportError, AttributeError):
+        return None
+    cells = vars(table_class).get(_CELLS)
+    if not isinstance(cells, property) or cells.fget is None:
+        return None
+    if not callable(vars(cell_class).get("merge")):
+        return None
+    return table_class, cell_class
+
+
+@contextmanager
+def cached_table_cells() -> Iterator[None]:
+    """Build the cell grid of a python-docx table once instead of once per ``table.cell`` call.
+
+    ``Table.cell`` rebuilds the whole grid on every call and pdf2docx calls it several times
+    per cell, which makes big tables quadratic. The grid only changes when cells are merged,
+    so it is kept on the table and dropped after every ``_Cell.merge``. Does nothing when
+    the installed python-docx has a different layout.
+    """
+    with _LOCK:
+        types = _resolve_table_types()
+        if types is None:
+            logger.debug("python-docx table layout not recognised; skipping the cell grid cache")
+            yield
+            return
+        table_class, cell_class = types
+        original_cells = vars(table_class)[_CELLS]
+        original_merge = vars(cell_class)["merge"]
+
+        def cells(table: Any) -> Any:
+            grid = table.__dict__.get(_CELLS_CACHE)
+            if grid is None:
+                grid = table.__dict__[_CELLS_CACHE] = original_cells.fget(table)
+            return grid
+
+        @functools.wraps(original_merge)
+        def merge(cell: Any, *args: Any, **kwargs: Any) -> Any:
+            try:
+                return original_merge(cell, *args, **kwargs)
+            finally:
+                getattr(cell._parent, "__dict__", {}).pop(_CELLS_CACHE, None)
+
+        setattr(table_class, _CELLS, property(cells))
+        cell_class.merge = merge
+        try:
+            yield
+        finally:
+            setattr(table_class, _CELLS, original_cells)
+            cell_class.merge = original_merge

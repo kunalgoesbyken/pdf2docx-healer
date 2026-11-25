@@ -13,7 +13,7 @@ from .list_markers import parse_marker
 from .log import logger
 
 _BLOCKS_MODULE = "pdf2docx.layout.Blocks"
-_PATCH_LOCK = threading.RLock()
+PATCH_LOCK = threading.RLock()
 
 
 def _is_list_item(text: Any, bullets: bool = True, numbers: bool = True) -> Optional[str]:
@@ -72,7 +72,7 @@ def list_item_patches() -> Iterator[None]:
     Raises IncompatiblePdf2docxError before touching anything when the installed
     pdf2docx lacks the expected internals.
     """
-    with _PATCH_LOCK:
+    with PATCH_LOCK:
         blocks_module, blocks_class, original_collect = _resolve_targets()
         original_is_list_item = blocks_module.is_list_item
 
@@ -87,3 +87,59 @@ def list_item_patches() -> Iterator[None]:
         finally:
             blocks_module.is_list_item = original_is_list_item
             blocks_class.collect_stream_lines = original_collect
+
+
+_SPANS_MODULE = "pdf2docx.text.Spans"
+_TEXT_SPAN_MODULE = "pdf2docx.text.TextSpan"
+_IMAGE_SPAN_MODULE = "pdf2docx.image.ImageSpan"
+
+
+def _resolve_span_types() -> "Optional[tuple[Any, Any, Any]]":
+    try:
+        spans = importlib.import_module(_SPANS_MODULE).Spans
+        text_span = importlib.import_module(_TEXT_SPAN_MODULE).TextSpan
+        image_span = importlib.import_module(_IMAGE_SPAN_MODULE).ImageSpan
+    except (ImportError, AttributeError):
+        return None
+    if not inspect.isfunction(vars(spans).get("restore")):
+        return None
+    return spans, text_span, image_span
+
+
+@contextmanager
+def keep_word_spaces() -> Iterator[None]:
+    """Keep the blank spans between two visible spans of a line, then restore pdf2docx.
+
+    PyMuPDF reports the gap between two words as its own whitespace-only span. pdf2docx
+    drops every unstyled blank span, so the words around it run together. Blank spans at
+    the start or end of a line are still dropped. Does nothing when the installed pdf2docx
+    has a different layout.
+    """
+    with PATCH_LOCK:
+        types = _resolve_span_types()
+        if types is None:
+            logger.debug("pdf2docx Spans.restore not found; blank spans are not kept")
+            yield
+            return
+        spans_class, text_span, image_span = types
+        original = vars(spans_class)["restore"]
+
+        def restore(self: Any, raws: Any) -> Any:
+            built = []
+            for raw in raws:
+                if "image" in raw:
+                    built.append((image_span(raw), True))
+                else:
+                    span = text_span(raw)
+                    built.append((span, bool(span.text.strip()) or bool(span.style)))
+            visible = [index for index, (_, shown) in enumerate(built) if shown]
+            first, last = (visible[0], visible[-1]) if visible else (0, -1)
+            for index, (span, shown) in enumerate(built):
+                self.append(span if shown or first < index < last else None)
+            return self
+
+        spans_class.restore = restore
+        try:
+            yield
+        finally:
+            spans_class.restore = original
