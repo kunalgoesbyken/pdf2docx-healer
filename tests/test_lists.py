@@ -2,12 +2,10 @@ import importlib.util
 
 from docx import Document
 from docx.oxml.ns import qn
+from docx.shared import Pt
 
-from docx_healer.list_detector import (
-    _apply_list_via_xml,
-    detect_number_format,
-    fix_lists_in_docx,
-)
+from docx_healer.list_detector import _Numbering, fix_lists_in_docx
+from docx_healer.list_markers import BULLET, LOWER_ROMAN
 from factories import make_docx
 
 LEVEL_CHILD_ORDER = ["start", "numFmt", "lvlText", "lvlJc", "pPr"]
@@ -65,59 +63,80 @@ def test_abstract_nums_always_precede_nums(tmp_path):
 def test_injected_definition_covers_nine_levels_in_schema_order(tmp_path):
     path = make_docx(tmp_path / "a.docx", lambda doc: doc.add_paragraph("x"))
     doc = Document(str(path))
-    paragraph = doc.paragraphs[0]
 
-    _apply_list_via_xml(paragraph, "number", level=2, num_fmt="lowerRoman")
+    _Numbering(doc).numbered((LOWER_ROMAN, "."), 4)
 
     abstract = doc.part.numbering_part.element.findall(qn("w:abstractNum"))[-1]
     levels = abstract.findall(qn("w:lvl"))
     assert len(levels) == 9
     assert all(local_names(lvl) == LEVEL_CHILD_ORDER for lvl in levels)
     assert [lvl.find(qn("w:lvlText")).get(qn("w:val")) for lvl in levels[:3]] == ["%1.", "%2.", "%3."]
+    assert {lvl.find(qn("w:start")).get(qn("w:val")) for lvl in levels} == {"4"}
+
+
+def test_bracket_styles_produce_matching_level_text(tmp_path):
+    path = make_docx(tmp_path / "a.docx", lambda doc: doc.add_paragraph("x"))
+    doc = Document(str(path))
+    numbering = _Numbering(doc)
+
+    for shape in (")", "()"):
+        numbering.numbered(("decimal", shape), 1)
+
+    texts = [
+        abstract.findall(qn("w:lvl"))[0].find(qn("w:lvlText")).get(qn("w:val"))
+        for abstract in doc.part.numbering_part.element.findall(qn("w:abstractNum"))[-2:]
+    ]
+    assert texts == ["%1)", "(%1)"]
 
 
 def test_bullet_definition_puts_run_properties_after_paragraph_properties(tmp_path):
     path = make_docx(tmp_path / "a.docx", lambda doc: doc.add_paragraph("x"))
     doc = Document(str(path))
 
-    _apply_list_via_xml(doc.paragraphs[0], "bullet")
+    _Numbering(doc).bullet()
 
     abstract = doc.part.numbering_part.element.findall(qn("w:abstractNum"))[-1]
     assert all(local_names(lvl) == LEVEL_CHILD_ORDER + ["rPr"] for lvl in abstract.findall(qn("w:lvl")))
+    assert {lvl.find(qn("w:numFmt")).get(qn("w:val")) for lvl in abstract.findall(qn("w:lvl"))} == {BULLET}
+
+
+def test_bullet_definition_is_created_once_per_document(tmp_path):
+    path = make_docx(tmp_path / "a.docx", lambda doc: doc.add_paragraph("x"))
+    doc = Document(str(path))
+    numbering = _Numbering(doc)
+    count = len(doc.part.numbering_part.element.findall(qn("w:abstractNum")))
+
+    assert numbering.bullet() == numbering.bullet()
+
+    assert len(doc.part.numbering_part.element.findall(qn("w:abstractNum"))) == count + 1
 
 
 def test_numbering_reference_follows_paragraph_style_in_schema_order(tmp_path):
     def build(doc):
-        paragraph = doc.add_paragraph("x")
-        paragraph.paragraph_format.keep_with_next = True
-        paragraph.paragraph_format.space_after = None
+        for text in ("a. first item", "b. second item"):
+            paragraph = doc.add_paragraph(text)
+            paragraph.paragraph_format.keep_with_next = True
 
     path = make_docx(tmp_path / "a.docx", build)
-    doc = Document(str(path))
 
-    _apply_list_via_xml(doc.paragraphs[0], "bullet", level=1)
+    fix_lists_in_docx(path)
 
-    names = local_names(doc.paragraphs[0]._p.pPr)
+    names = local_names(Document(str(path)).paragraphs[0]._p.pPr)
     assert names.index("keepNext") < names.index("numPr")
 
 
-def test_reusing_a_num_id_does_not_add_definitions(tmp_path):
-    path = make_docx(tmp_path / "a.docx", lambda doc: [doc.add_paragraph("x"), doc.add_paragraph("y")])
-    doc = Document(str(path))
-    numbering = doc.part.numbering_part.element
-    first, second = doc.paragraphs[:2]
+def test_bullets_deeper_than_the_builtin_styles_use_the_shared_bullet_definition(tmp_path):
+    def build(doc):
+        for depth in range(5):
+            paragraph = doc.add_paragraph("• item")
+            paragraph.paragraph_format.left_indent = Pt(30 * depth)
 
-    num_id = _apply_list_via_xml(first, "bullet")
-    count = len(numbering.findall(qn("w:abstractNum")))
-    assert _apply_list_via_xml(second, "bullet", level=1, _num_id=num_id) == num_id
+    path = make_docx(tmp_path / "a.docx", build)
 
-    assert len(numbering.findall(qn("w:abstractNum"))) == count
-    assert second._p.pPr.numPr.ilvl.val == 1
+    assert fix_lists_in_docx(path) == 5
 
-
-def test_detect_number_format():
-    assert detect_number_format("a.") == "lowerLetter"
-    assert detect_number_format("B)") == "upperLetter"
-    assert detect_number_format("iv.") == "lowerRoman"
-    assert detect_number_format("1.1.") == "decimal"
-    assert detect_number_format("3.") == "decimal"
+    paragraphs = Document(str(path)).paragraphs
+    assert [p.style.name for p in paragraphs[:3]] == ["List Bullet", "List Bullet 2", "List Bullet 3"]
+    deep = [p._p.pPr.numPr for p in paragraphs[3:]]
+    assert [n.ilvl.val for n in deep] == [3, 4]
+    assert len({n.numId.val for n in deep}) == 1
