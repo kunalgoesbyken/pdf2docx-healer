@@ -12,6 +12,8 @@ MIN_PAGE_WORDS = 5
 PAGE_LOST_BELOW = 0.5
 SHINGLE = 8
 JOINERS = "‌‍"
+HYPHENS = frozenset("-­‐‑")
+SPLIT = "\x00"
 SINGLE_CHAR_RANGES = (
     (0x3040, 0x30FF),
     (0x3400, 0x4DBF),
@@ -27,11 +29,47 @@ def is_single_char_script(char: str) -> bool:
     return any(low <= code <= high for low, high in SINGLE_CHAR_RANGES)
 
 
-def tokenize(text: str) -> List[str]:
-    """Split text into folded words; CJK is one word per character."""
+def _is_letter(char: str) -> bool:
+    return unicodedata.category(char)[0] == "L" and not is_single_char_script(char)
+
+
+def _hyphen_end(text: str, index: int, current: List[str]) -> int:
+    """Return where a word continues after a hyphen at text[index], -1 if it does not, or len(text).
+
+    A hyphen right after a letter, followed by optional white space and a letter, joins the
+    two parts, so a typesetter's line-end split and a compound word score the same whatever
+    a converter does with them.
+    """
+    if text[index] not in HYPHENS or not current or not _is_letter(current[-1]):
+        return -1
+    after = index + 1
+    while after < len(text) and text[after].isspace():
+        after += 1
+    if after == len(text) or _is_letter(text[after]):
+        return after
+    return -1
+
+
+def tokenize(text: str, keep_split: bool = False) -> List[str]:
+    """Split text into folded words; CJK is one word per character.
+
+    With ``keep_split`` a word cut by a hyphen at the very end of the text ends in SPLIT, so
+    ``join_split`` can rejoin it with the first word of the next text.
+    """
     tokens: List[str] = []
     current: List[str] = []
-    for char in unicodedata.normalize("NFKC", text).casefold():
+    folded = unicodedata.normalize("NFKC", text).casefold()
+    index = 0
+    while index < len(folded):
+        char = folded[index]
+        continued = _hyphen_end(folded, index, current)
+        if continued == len(folded):
+            current.append(SPLIT)
+            break
+        if continued >= 0:
+            index = continued
+            continue
+        index += 1
         if char in JOINERS:
             continue
         if is_single_char_script(char):
@@ -46,7 +84,23 @@ def tokenize(text: str) -> List[str]:
             current = []
     if current:
         tokens.append("".join(current))
-    return tokens
+    return tokens if keep_split else join_split(tokens)
+
+
+def join_split(tokens: Sequence[str]) -> List[str]:
+    """Join each word ending in SPLIT with the next word when that starts with a letter."""
+    joined: List[str] = []
+    for token in tokens:
+        if joined and joined[-1].endswith(SPLIT):
+            stem = joined[-1][: -len(SPLIT)]
+            if _is_letter(token[0]):
+                joined[-1] = stem + token
+                continue
+            joined[-1] = stem
+        joined.append(token)
+    if joined and joined[-1].endswith(SPLIT):
+        joined[-1] = joined[-1][: -len(SPLIT)]
+    return [token for token in joined if token]
 
 
 def confirmed(
@@ -236,7 +290,7 @@ def pages_lost(pages: Sequence[Sequence[str]], hyp: Sequence[str]) -> Tuple[int,
     text_pages = 0
     lost = 0
     for words in pages:
-        text = "".join(words)
+        text = "".join(words).replace(SPLIT, "")
         if len(words) < MIN_PAGE_WORDS or len(text) < SHINGLE:
             continue
         text_pages += 1

@@ -3,7 +3,7 @@
 from typing import Any, Dict, List, Optional, Tuple
 
 from .facts import DocxFacts, ParaFact
-from .words import pages_lost, tokenize, word_scores
+from .words import join_split, pages_lost, tokenize, word_scores
 
 RATIO_KEYS = (
     "word_recall",
@@ -134,8 +134,8 @@ def list_scores(
 
 
 def reference_words(truth: Dict[str, Any]) -> List[str]:
-    """Flatten the per-page reference words."""
-    return [word for page in truth["pages"] for word in page]
+    """Flatten the per-page reference words, rejoining words split across pages."""
+    return join_split([word for page in truth["pages"] for word in page])
 
 
 def defined_metrics(truth: Dict[str, Any], expected: Optional[Dict[str, Any]]) -> Dict[str, bool]:

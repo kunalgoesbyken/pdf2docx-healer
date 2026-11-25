@@ -9,7 +9,7 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 from lxml import etree
 
 from .numbering import NumberingRenderer
-from .words import tokenize
+from .words import join_split, tokenize
 
 NS = {
     "w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main",
@@ -186,8 +186,8 @@ def extra_words(document: Any) -> List[str]:
                 for node in paragraph.iter(f"{W}t")
                 if not any(True for _ in node.iterancestors(f"{MC}Fallback"))
             )
-            words.extend(tokenize(text))
-    return words
+            words.extend(tokenize(text, keep_split=True))
+    return join_split(words)
 
 
 class Walker:
@@ -220,7 +220,7 @@ class Walker:
             else:
                 self.on_end(element)
         self.resolve()
-        self.facts.words = self.body_words
+        self.facts.words = join_split(self.body_words)
         return self.facts
 
     def on_start(self, element: Any) -> None:
@@ -260,7 +260,7 @@ class Walker:
             record.text = "".join(buffer)
             if record.kind == "number" and record.label:
                 self.body_words.extend(tokenize(record.label))
-            self.body_words.extend(tokenize(record.text))
+            self.body_words.extend(tokenize(record.text, keep_split=True))
         elif element.tag == f"{W}tbl":
             self.table_depth -= 1
 

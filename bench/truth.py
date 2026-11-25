@@ -8,7 +8,7 @@ from typing import Any, Dict, List, Optional
 from .compat import pymupdf
 from .words import tokenize
 
-SCHEMA = 2
+SCHEMA = 3
 
 
 def sha256_file(path: Path) -> str:
@@ -39,7 +39,7 @@ def read_truth(path: Path) -> Dict[str, Any]:
     with pymupdf.open(str(path)) as doc:
         outline = [[int(item[0]), str(item[1])] for item in doc.get_toc(simple=True)]
         for page in doc:
-            words = tokenize(page.get_text())
+            words = tokenize(page.get_text(), keep_split=True)
             pages.append(words)
             placed = len(page.get_image_info())
             images += placed
