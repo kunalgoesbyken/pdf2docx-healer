@@ -1,6 +1,6 @@
 """Metrics for one (PDF, converter) pair: PDF truth against the facts of the produced DOCX."""
 
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 from .facts import DocxFacts, ParaFact
 from .words import join_split, pages_lost, tokenize, word_scores
@@ -38,28 +38,42 @@ def normalize_uri(uri: str) -> str:
 def heading_scores(
     outline: List[List[Any]], paragraphs: List[ParaFact]
 ) -> Tuple[Optional[float], Optional[float]]:
-    """Return (recall, level accuracy) of PDF outline entries among DOCX heading paragraphs."""
-    available: Dict[str, List[int]] = {}
-    for paragraph in paragraphs:
+    """Return (recall, level accuracy) of PDF outline entries among DOCX heading paragraphs.
+
+    A heading also matches under its text without a leading section number, since outlines
+    often leave out the "2.1" the page shows. Each heading paragraph counts for one entry.
+    """
+    available: Dict[str, List[Tuple[int, int]]] = {}
+    for index, paragraph in enumerate(paragraphs):
         if paragraph.heading is not None:
-            key = " ".join(tokenize(paragraph.text))
-            available.setdefault(key, []).append(paragraph.heading)
+            for key in heading_keys(tokenize(paragraph.text)):
+                available.setdefault(key, []).append((index, paragraph.heading))
     entries = [(int(level), " ".join(tokenize(str(title)))) for level, title in outline]
     entries = [(level, key) for level, key in entries if key]
     if not entries:
         return None, None
+    used: Set[int] = set()
     found = right = 0
     for level, key in entries:
-        levels = available.get(key)
-        if not levels:
+        candidates = [item for item in available.get(key, ()) if item[0] not in used]
+        if not candidates:
             continue
         found += 1
-        if level in levels:
-            levels.remove(level)
-            right += 1
-        else:
-            levels.pop(0)
+        exact = [item for item in candidates if item[1] == level]
+        used.add((exact or candidates)[0][0])
+        right += 1 if exact else 0
     return found / len(entries), right / len(entries)
+
+
+def heading_keys(tokens: List[str]) -> List[str]:
+    """Return the heading's key, plus the key without leading number tokens when it has them."""
+    keys = [" ".join(tokens)] if tokens else []
+    lead = 0
+    while lead < len(tokens) - 1 and tokens[lead].isdigit():
+        lead += 1
+    if lead:
+        keys.append(" ".join(tokens[lead:]))
+    return keys
 
 
 def symbol_prefix(text: str) -> bool:

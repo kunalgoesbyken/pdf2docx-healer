@@ -216,3 +216,35 @@ def test_image_only_reference_leaves_word_metrics_undefined(tmp_path):
     assert result["word_recall"] is None and result["word_precision"] is None
     assert result["images_score"] == 0.0
     assert failure_scores(truth)["word_recall"] is None
+
+
+def _headings(*items):
+    from bench.facts import ParaFact
+
+    return [ParaFact(heading=level, text=text) for level, text in items]
+
+
+def test_heading_with_a_section_number_matches_an_outline_title_without_one():
+    from bench.score import heading_scores
+
+    outline = [[1, "Introduction"], [2, "Sparse Mixture of Experts"], [1, "Results"]]
+    paragraphs = _headings((1, "1 Introduction"), (2, "2.1 Sparse Mixture of Experts"), (2, "3 Results"))
+
+    assert heading_scores(outline, paragraphs) == (1.0, 2 / 3)
+
+
+def test_one_heading_paragraph_is_credited_to_one_outline_entry_only():
+    from bench.score import heading_scores
+
+    outline = [[1, "Introduction"], [1, "1 Introduction"]]
+
+    assert heading_scores(outline, _headings((1, "1 Introduction"))) == (0.5, 0.5)
+
+
+def test_numbered_outline_titles_still_match_numbered_headings():
+    from bench.score import heading_scores
+
+    outline = [[1, "4 Results"], [1, "2024 Plans"]]
+    paragraphs = _headings((1, "4 Results"), (1, "Plans"))
+
+    assert heading_scores(outline, paragraphs) == (0.5, 0.5)
