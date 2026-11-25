@@ -22,7 +22,6 @@ from layout_support import (
     make_two_column_pdf,
     nested_table_count,
     table_texts,
-    text_directions,
 )
 
 Maker = Callable[[Path], Path]
@@ -116,11 +115,12 @@ def test_shaded_callout_survives_as_a_table(tmp_path):
     assert "Plain paragraph after the callout" not in "".join(table_texts(out))
 
 
-def test_rotated_margin_label_keeps_its_text_direction(tmp_path):
+def test_rotated_margin_label_does_not_wrap_the_page_in_a_table(tmp_path):
     out = convert(make_rotated_label_pdf, tmp_path)
 
-    assert text_directions(out) == 1
+    assert table_count(out) == 0
     assert "Margin stamp rotated" in body_text(out)
+    assert order(body_text(out), "Body paragraph line 0", "Body paragraph line 7")
 
 
 def test_switching_the_filter_off_restores_pdf2docx_tables(tmp_path):

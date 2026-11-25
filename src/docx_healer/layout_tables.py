@@ -85,9 +85,10 @@ def layout_table_filter(rules: TableRules = TableRules()) -> Iterator[None]:
     """Drop stream-table candidates that are not tabular, then restore pdf2docx.
 
     A candidate is kept as pdf2docx proposed it when it overlaps a visible shading (a
-    callout or header band), holds a rotated line (pdf2docx draws that as a table cell) or
-    has more than ``max_group_lines`` lines (it is not analysed, with one debug log).
-    Does nothing when the installed pdf2docx has a different layout.
+    callout or header band) or has more than ``max_group_lines`` lines (it is not analysed,
+    with one debug log). A rotated margin label is no evidence of a table: pdf2docx wraps the
+    whole page in one for it, so such a label is written as a plain paragraph instead. Does
+    nothing when the installed pdf2docx has a different layout.
     """
     with PATCH_LOCK:
         original = _resolve_collect()
@@ -118,6 +119,4 @@ def _keep(lines: Any, shadings: List[Any], rules: TableRules) -> bool:
     if len(lines) > rules.max_group_lines:
         logger.debug("Stream table candidate of %d lines is over max_group_lines", len(lines))
         return True
-    if any(line.is_vertical_text for line in lines) or _is_shaded(lines, shadings):
-        return True
-    return looks_tabular(lines, rules)
+    return _is_shaded(lines, shadings) or looks_tabular(lines, rules)

@@ -172,7 +172,3 @@ def make_rotated_label_pdf(path: Path) -> Path:
     page.insert_text((60, 300), "Margin stamp rotated", fontsize=11, rotate=90)
     return _save(doc, path)
 
-
-def text_directions(path: Path) -> int:
-    body = Document(str(path)).element.body
-    return len(list(body.iter(qn("w:textDirection"))))
