@@ -117,3 +117,110 @@ def test_cached_listing_leaves_the_converted_document_byte_identical(tmp_path, m
 
     assert len(calls) >= 2
     assert part_hashes(tmp_path / "fast.docx") == part_hashes(tmp_path / "plain.docx")
+
+
+def merged_table_pdf(path):
+    doc = pymupdf.open()
+    page = doc.new_page()
+    xs, ys = [72, 172, 272, 372], [100, 130, 160, 190]
+    for x in xs:
+        page.draw_line((x, ys[0] if x in (72, 372) else ys[1]), (x, ys[-1]), width=1)
+    for y in ys:
+        page.draw_line((xs[0], y), (xs[-1], y), width=1)
+    page.insert_text((80, 120), "Merged header", fontsize=11)
+    for row in (1, 2):
+        for col in range(3):
+            page.insert_text((xs[col] + 6, ys[row] + 20), f"r{row}c{col}", fontsize=11)
+    doc.save(str(path))
+    doc.close()
+    return path
+
+
+def make_table(rows: int = 3, columns: int = 3) -> Any:
+    from docx import Document
+
+    return Document().add_table(rows=rows, cols=columns)
+
+
+def grid_pattern(table: Any) -> List[int]:
+    first: Dict[int, int] = {}
+    return [first.setdefault(id(cell._tc), len(first)) for cell in table._cells]
+
+
+def test_the_cell_grid_is_built_once_per_table(monkeypatch):
+    from docx.table import Table
+
+    builds: List[int] = []
+    original = vars(Table)["_cells"]
+
+    def counting(table: Any) -> Any:
+        builds.append(1)
+        return original.fget(table)
+
+    monkeypatch.setattr(Table, "_cells", property(counting))
+    table = make_table()
+    with speedups.cached_table_cells():
+        cells = [table.cell(row, col) for row in range(3) for col in range(3) for _ in range(4)]
+
+    assert len(cells) == 36
+    assert len(builds) == 1
+
+
+def test_merging_cells_drops_the_cached_grid():
+    table = make_table()
+    plain = make_table()
+    plain.cell(0, 0).merge(plain.cell(1, 1))
+    with speedups.cached_table_cells():
+        assert len(table._cells) == 9
+        table.cell(0, 0).merge(table.cell(1, 1))
+        pattern = grid_pattern(table)
+
+    assert pattern == grid_pattern(plain)
+    assert len(set(pattern)) == 6
+
+
+def test_a_failed_merge_still_drops_the_cached_grid():
+    table = make_table()
+    with speedups.cached_table_cells():
+        table.cell(0, 0).merge(table.cell(0, 1))
+        stale = table._cells
+        try:
+            table.cell(0, 0).merge(table.cell(2, 2))
+        except ValueError:
+            pass
+        assert table._cells is not stale
+
+
+def test_table_internals_are_restored_afterwards():
+    from docx.table import Table, _Cell
+
+    cells, merge = vars(Table)["_cells"], vars(_Cell)["merge"]
+
+    with speedups.cached_table_cells():
+        assert vars(Table)["_cells"] is not cells
+
+    assert vars(Table)["_cells"] is cells
+    assert vars(_Cell)["merge"] is merge
+    assert not hasattr(make_table(), "_docx_healer_cells")
+
+
+def test_unknown_python_docx_layout_is_left_alone(monkeypatch):
+    from docx.table import Table
+
+    monkeypatch.setattr(speedups, "_resolve_table_types", lambda: None)
+    original = vars(Table)["_cells"]
+
+    with speedups.cached_table_cells():
+        assert vars(Table)["_cells"] is original
+
+
+def test_cached_cells_leave_a_merged_table_document_byte_identical(tmp_path, monkeypatch):
+    pdf = merged_table_pdf(tmp_path / "in.pdf")
+    config = HealerConfig(verbose=False)
+
+    heal(pdf, tmp_path / "fast.docx", config)
+    monkeypatch.setattr(converter, "cached_table_cells", nullcontext)
+    heal(pdf, tmp_path / "plain.docx", config)
+
+    assert 'w:gridSpan' in zipfile.ZipFile(tmp_path / "fast.docx").read("word/document.xml").decode()
+    assert part_hashes(tmp_path / "fast.docx") == part_hashes(tmp_path / "plain.docx")
