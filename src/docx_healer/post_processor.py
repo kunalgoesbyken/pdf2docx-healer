@@ -8,6 +8,7 @@ from .font_mapper import fix_docx_fonts
 from .headings import fix_docx_headings
 from .internal_links import fix_docx_internal_links
 from .link_injector import fix_docx_hyperlinks
+from .link_safety import unlink_unsafe_targets
 from .list_detector import fix_lists_in_docx
 from .log import logger
 
@@ -21,6 +22,7 @@ class PostProcessReport:
     hyperlinks_added: int = 0
     internal_links_added: int = 0
     fonts_fixed: int = 0
+    unsafe_links_removed: int = 0
     failed_passes: List[str] = field(default_factory=list)
 
 
@@ -83,4 +85,8 @@ def post_process_docx(
             report, "fonts", docx_path,
             lambda: fix_docx_fonts(docx_path, verbose=verbose),
         )
+    report.unsafe_links_removed = _run_pass(
+        report, "link safety", docx_path,
+        lambda: unlink_unsafe_targets(docx_path, verbose=verbose),
+    )
     return report

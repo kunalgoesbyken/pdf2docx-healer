@@ -18,6 +18,8 @@ class FlowLimits:
     max_image_bytes: int = 128 * 1024 * 1024
     table_seconds: float = 120.0
     max_drawings: int = 5000
+    max_drawing_items: int = 200000
+    max_image_pixels: int = 50_000_000
     max_table_cells: int = 20000
 
 

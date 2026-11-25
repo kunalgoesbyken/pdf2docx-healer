@@ -148,7 +148,9 @@ def _page_links(page: Any, budget: Budget) -> Dict[int, List[Tuple[Rect, LinkKey
             )
             break
         count += 1
-        rect = link["from"] * page.derotation_matrix
+        rect = (pymupdf.Rect(link["from"]) & page.rect) * page.derotation_matrix
+        if rect.is_empty or rect.is_infinite:
+            continue
         box = (rect.x0, rect.y0, rect.x1, rect.y1)
         for band in range(int(box[1] // _BAND), int(box[3] // _BAND) + 1):
             index.setdefault(band, []).append((box, key))
@@ -277,6 +279,14 @@ def _add_image(data: PageData, block: Dict[str, Any], budget: Budget) -> None:
     if (width < _MIN_IMAGE_SIDE and height < _MIN_IMAGE_SIDE) or width * height < _MIN_IMAGE_AREA:
         logger.debug("Skipped decorative image on page %d", data.number + 1)
         return
+    pixels = int(block.get("width", 0)) * int(block.get("height", 0))
+    if pixels > budget.limits.max_image_pixels:
+        _warn_once(
+            budget, f"pixels{data.number}",
+            f"Skipped an image on page {data.number + 1} larger than "
+            f"max_image_pixels={budget.limits.max_image_pixels}",
+        )
+        return
     if budget.images_left <= 0 or budget.bytes_left < len(image):
         _warn_once(
             budget, "images",
@@ -300,8 +310,8 @@ def _add_tables(page: Any, data: PageData, budget: Budget) -> None:
             "later tables stay paragraphs",
         )
         return
-    paths = page.get_cdrawings()
-    if len(paths) > limits.max_drawings or sum(len(p["items"]) for p in paths) < _MIN_STROKES:
+    items = _drawing_items(page, budget)
+    if items is None or items < _MIN_STROKES:
         return
     started = time.perf_counter()
     try:
@@ -410,12 +420,35 @@ def _cell_for(item: TableItem, line: Line) -> Cell:
     return same_row[0] if same_row else item.cells[0]
 
 
-def _add_figures(page: Any, data: PageData, budget: Budget) -> None:
+def _drawing_items(page: Any, budget: Budget) -> Optional[int]:
+    """Count the page's path segments, or None when the page is over a drawing limit."""
     limits = budget.limits
+    paths = page.get_cdrawings()
+    items = sum(len(path["items"]) for path in paths)
+    if len(paths) > limits.max_drawings or items > limits.max_drawing_items:
+        _warn_once(
+            budget, f"drawings{page.number}",
+            f"Page {page.number + 1} has more than max_drawings={limits.max_drawings} paths "
+            f"or max_drawing_items={limits.max_drawing_items} segments; "
+            "its tables and figures stay as text",
+        )
+        return None
+    return items
+
+
+def _add_figures(page: Any, data: PageData, budget: Budget) -> None:
     if not data.units or budget.table_seconds_left <= 0:
         return
-    if len(page.get_cdrawings()) > limits.max_drawings:
+    if _drawing_items(page, budget) is None:
         return
+    started = time.perf_counter()
+    try:
+        _rasterise_figures(page, data, budget)
+    finally:
+        budget.table_seconds_left -= time.perf_counter() - started
+
+
+def _rasterise_figures(page: Any, data: PageData, budget: Budget) -> None:
     try:
         drawings = page.get_drawings()
         clusters = page.cluster_drawings(drawings=drawings)
@@ -479,7 +512,7 @@ def _inside(line: Line, box: Rect) -> bool:
 
 
 def _raster(page: Any, clip: Any, budget: Budget) -> Optional[bytes]:
-    dpi = min(_FIGURE_DPI, _FIGURE_MAX_PIXELS * 72.0 / max(clip.width, 1.0))
+    dpi = min(_FIGURE_DPI, _FIGURE_MAX_PIXELS * 72.0 / max(clip.width, clip.height, 1.0))
     try:
         data = bytes(page.get_pixmap(clip=clip, dpi=int(dpi)).tobytes("png"))
     except Exception as exc:

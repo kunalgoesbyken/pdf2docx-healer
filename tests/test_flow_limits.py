@@ -53,6 +53,48 @@ def test_table_time_budget_falls_back_to_plain_paragraphs(tmp_path, caplog):
     assert _warnings(caplog, "table_seconds")
 
 
+@pytest.mark.parametrize("limit,kept", [(4999, 0), (5000, 1)])
+def test_image_pixel_cap_skips_only_images_over_the_limit(tmp_path, caplog, limit, kept):
+    def build(doc):
+        page = new_page(doc)
+        put(page, LEFT, 60, "One picture follows this sentence on the page.")
+        page.insert_image(pymupdf.Rect(72, 100, 272, 200), stream=png_bytes(100, 50))
+
+    with caplog.at_level(logging.WARNING, logger="docx_healer"):
+        out = convert(tmp_path, build, limits=FlowLimits(max_image_pixels=limit))
+
+    assert len(Document(str(out)).inline_shapes) == kept
+    assert bool(_warnings(caplog, "max_image_pixels")) is (kept == 0)
+
+
+@pytest.mark.parametrize("limit,found", [(6, False), (7, True)])
+def test_drawing_segment_cap_leaves_tables_as_text(tmp_path, caplog, limit, found):
+    def build(doc):
+        grid(new_page(doc), LEFT, 100, [100, 100], 26, [["Name", "Value"], ["a", "1"]])
+
+    with caplog.at_level(logging.WARNING, logger="docx_healer"):
+        out = convert(tmp_path, build, limits=FlowLimits(max_drawing_items=limit))
+
+    assert bool(tables(out)) is found
+    if not found:
+        assert "Name" in " ".join(texts(out))
+    assert bool(_warnings(caplog, "max_drawing_items")) is not found
+
+
+def test_link_rect_far_outside_the_page_is_clipped(tmp_path):
+    def build(doc):
+        page = new_page(doc)
+        put(page, LEFT, 100, "The linked sentence sits here on the page.")
+        page.insert_link({
+            "kind": pymupdf.LINK_URI, "from": pymupdf.Rect(70, -1e7, 400, 1e7),
+            "uri": "https://example.com/",
+        })
+
+    out = convert(tmp_path, build)
+
+    assert "linked sentence" in " ".join(texts(out))
+
+
 def test_table_cell_cap_leaves_the_text_as_paragraphs(tmp_path):
     def build(doc):
         grid(new_page(doc), LEFT, 100, [100, 100, 100], 26, [["A", "B", "C"], ["d", "e", "f"]])
