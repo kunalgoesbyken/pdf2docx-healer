@@ -1,0 +1,157 @@
+{
+  "version": 1,
+  "documents": [
+    {
+      "id": "llama-two-column",
+      "category": "two-column",
+      "title": "LLaMA: Open and Efficient Foundation Language Models (arXiv 2302.13971v1)",
+      "url": "https://arxiv.org/pdf/2302.13971v1",
+      "source_page": "https://arxiv.org/abs/2302.13971v1",
+      "license": "CC BY 4.0",
+      "sha256": "2e663675ae36ad12adb2f5a05281bac2747ecf8d23d92bedd9f937a89fee7136",
+      "tests": "Two-column research paper: reading order across columns, 36 external links, tables and figures, no outline.",
+      "pages": 27
+    },
+    {
+      "id": "irs-pub15-lists",
+      "category": "report-lists",
+      "title": "IRS Publication 15 (2024), Employer's Tax Guide",
+      "url": "https://www.irs.gov/pub/irs-prior/p15--2024.pdf",
+      "source_page": "https://www.irs.gov/publications/p15",
+      "license": "Public domain (US federal government work, 17 U.S.C. 105)",
+      "sha256": "3a15da95e39b24f2b6c61f4abc85298c897f57600c3508f9381fab7180a092e0",
+      "tests": "Single-column government report with bullets, numbered and lettered lists, nested levels and many tables.",
+      "pages": 57
+    },
+    {
+      "id": "irs-fw9-form",
+      "category": "form-tables",
+      "title": "IRS Form W-9 (Rev. October 2018)",
+      "url": "https://www.irs.gov/pub/irs-prior/fw9--2018.pdf",
+      "source_page": "https://www.irs.gov/forms-pubs/about-form-w-9",
+      "license": "Public domain (US federal government work, 17 U.S.C. 105)",
+      "sha256": "78366390cd4e3db89e06009fce54df272bee0d3b34003f3a786c4835239bfdff",
+      "tests": "Government form: ruled boxes, checkbox rows, field tables and small print in several columns.",
+      "pages": 6
+    },
+    {
+      "id": "slides-hack-for-heritage",
+      "category": "slides",
+      "title": "Hack for Heritage 2020, presentation day 1 (slide deck exported to PDF)",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/8/82/Hack_for_Heritage_2020_%E2%80%93_presentation_dag_1.pdf",
+      "source_page": "https://commons.wikimedia.org/wiki/File:Hack_for_Heritage_2020_%E2%80%93_presentation_dag_1.pdf",
+      "license": "CC BY-SA 4.0",
+      "sha256": "15ab41d41def68217feaa4d806078d8519277ea7510314505537ade78e05a635",
+      "tests": "Slide deck: one idea per page, large short text boxes, images on most slides, links in text.",
+      "pages": 8
+    },
+    {
+      "id": "mixtral-outline",
+      "category": "outline",
+      "title": "Mixtral of Experts (arXiv 2401.04088v1)",
+      "url": "https://arxiv.org/pdf/2401.04088v1",
+      "source_page": "https://arxiv.org/abs/2401.04088v1",
+      "license": "CC BY 4.0",
+      "sha256": "f8bbf0e9d979b7a8ce7be65119266545a229a85b57e077d8bd048e458bb642da",
+      "tests": "Paper with a PDF outline (bookmarks) of 10 entries over two levels, figures and tables.",
+      "pages": 13
+    },
+    {
+      "id": "nist-csf2-links",
+      "category": "internal-links",
+      "title": "NIST Cybersecurity Framework (CSF) 2.0, NIST CSWP 29",
+      "url": "https://nvlpubs.nist.gov/nistpubs/CSWP/NIST.CSWP.29.pdf",
+      "source_page": "https://csrc.nist.gov/pubs/cswp/29/the-nist-cybersecurity-framework-csf-20/final",
+      "license": "Public domain (US federal government work, 17 U.S.C. 105)",
+      "sha256": "3c31f46fee98cac0c4323453e5109291a213b4de7fef8c058af9bf67f717433c",
+      "tests": "Government report with 47 internal cross-reference links, 56 external links, an outline and bullet lists.",
+      "pages": 32
+    },
+    {
+      "id": "zh-us-constitution",
+      "category": "cjk",
+      "title": "Constitution of the United States (Traditional Chinese and English)",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/8/84/Constitution_of_the_United_States_%28Traditional_Chinese%29.pdf",
+      "source_page": "https://commons.wikimedia.org/wiki/File:Constitution_of_the_United_States_(Traditional_Chinese).pdf",
+      "license": "Public domain (as declared on the Wikimedia Commons file page)",
+      "sha256": "680e2c6a033404e5167bb071075692538737f6670857908c6ea1308d433f9c6c",
+      "tests": "CJK text interleaved with English, per-ideograph tokens, font fallback for Traditional Chinese.",
+      "pages": 29
+    },
+    {
+      "id": "ar-wikipedia-education",
+      "category": "rtl-arabic",
+      "title": "Wikipedia in Arabic, Education Program",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/e/e7/Wikipedia-in-Arabic-Education-Program.pdf",
+      "source_page": "https://commons.wikimedia.org/wiki/File:Wikipedia-in-Arabic-Education-Program.pdf",
+      "license": "CC BY-SA 3.0",
+      "sha256": "01d544c65b75df7532dadece146fc4b237050e763a362658e890685925acbb4f",
+      "tests": "Arabic right-to-left text with diacritics, many small images, mixed Latin words.",
+      "pages": 2
+    },
+    {
+      "id": "he-wikimedia-article",
+      "category": "rtl-hebrew",
+      "title": "Hebrew article exported from Hebrew Wikipedia (Commons file 2.3 6-215)",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/9/9c/2.3_6-215_%D7%A4%D7%96%D7%99_%D7%91%D7%91%D7%A9%D7%A2%D7%A8_15.4.2005_-_%D7%9E%D7%90%D7%9E%D7%A8%D7%95_%D7%A9%D7%9C_%D7%A4%D7%96%D7%99_%D7%91%D7%91%D7%A9%D7%A2%D7%A8_%D7%94%D7%9E%D7%A1%D7%9B%D7%9D_%D7%90%D7%AA_%D7%9E%D7%94%D7%9C%D7%9B%D7%99%D7%95_%D7%9C%D7%A4%D7%99%D7%AA%D7%95%D7%97_%D7%94%D7%9E%D7%9B%D7%9C%D7%9C%D7%95%D7%AA_%D7%94%D7%90%D7%A7%D7%93%D7%9E%D7%99%D7%95%D7%AA_%D7%94%D7%9E%D7%AA%D7%95%D7%A7%D7%A6%D7%91%D7%95%D7%AA.pdf",
+      "source_page": "https://commons.wikimedia.org/wiki/File:2.3_6-215_%D7%A4%D7%96%D7%99_%D7%91%D7%91%D7%A9%D7%A2%D7%A8_15.4.2005_-_%D7%9E%D7%90%D7%9E%D7%A8%D7%95_%D7%A9%D7%9C_%D7%A4%D7%96%D7%99_%D7%91%D7%91%D7%A9%D7%A2%D7%A8_%D7%94%D7%9E%D7%A1%D7%9B%D7%9D_%D7%90%D7%AA_%D7%9E%D7%94%D7%9C%D7%9B%D7%99%D7%95_%D7%9C%D7%A4%D7%99%D7%AA%D7%95%D7%97_%D7%94%D7%9E%D7%9B%D7%9C%D7%9C%D7%95%D7%AA_%D7%94%D7%90%D7%A7%D7%93%D7%9E%D7%99%D7%95%D7%AA_%D7%94%D7%9E%D7%AA%D7%95%D7%A7%D7%A6%D7%91%D7%95%D7%AA.pdf",
+      "license": "CC BY-SA 4.0",
+      "sha256": "e79df06d1a770bffa50a8abea0ef540e71e0baef5654f9688cd3803eda5d27e7",
+      "tests": "Hebrew right-to-left running text over eight pages with footnote-style numbers.",
+      "pages": 8
+    },
+    {
+      "id": "hi-mizoram-syllabus",
+      "category": "devanagari",
+      "title": "M.A. Hindi Syllabus, Mizoram University",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/a/ac/M.A._Hindi_Syllabus_Mizoram_University.pdf",
+      "source_page": "https://commons.wikimedia.org/wiki/File:M.A._Hindi_Syllabus_Mizoram_University.pdf",
+      "license": "Public domain (as declared on the Wikimedia Commons file page)",
+      "sha256": "895aa38d54002a1f7a1f0cd43bce9e22c470063e79efc03fdeea9c5f299cb9bf",
+      "tests": "Devanagari text with combining vowel signs and conjuncts, course tables, numbered units.",
+      "pages": 36
+    },
+    {
+      "id": "us-patent-174465-scan",
+      "category": "scanned",
+      "title": "US Patent 174,465, Improvement in Telegraphy (1876), page images only",
+      "url": "https://image-ppubs.uspto.gov/dirsearch-public/print/downloadPdf/0174465",
+      "sha256_of": "images",
+      "source_page": "https://patents.google.com/patent/US174465A/en",
+      "license": "Public domain (US patent published in 1876)",
+      "sha256": "51cbe54ba4ba1ade12b3489dfcad979240823939b48e022110409630225df3f4",
+      "tests": "Image-only scan with no text layer: six page images, nothing to extract without OCR.",
+      "pages": 6
+    },
+    {
+      "id": "wmil-financial-statements",
+      "category": "table-heavy",
+      "title": "Wikimedia Israel Financial Statements 2012",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/a/a5/Wikimedia_Israel_Financial_Statements_2012.pdf",
+      "source_page": "https://commons.wikimedia.org/wiki/File:Wikimedia_Israel_Financial_Statements_2012.pdf",
+      "license": "CC BY-SA 3.0",
+      "sha256": "c07c7faf97700374a062f3060752ee3af6628464477ea536890846a5cd5ec30c",
+      "tests": "Table-heavy statement: six ruled tables of figures, totals rows, notes with numbered items (invoice-like layout).",
+      "pages": 10
+    },
+    {
+      "id": "nist-sp800-53r5-long",
+      "category": "long",
+      "slow": true,
+      "title": "NIST SP 800-53 Rev. 5, Security and Privacy Controls",
+      "url": "https://nvlpubs.nist.gov/nistpubs/SpecialPublications/NIST.SP.800-53r5.pdf",
+      "source_page": "https://csrc.nist.gov/pubs/sp/800/53/r5/upd1/final",
+      "license": "Public domain (US federal government work, 17 U.S.C. 105)",
+      "sha256": "fc63bcd61715d0181dd8e85998b1e6201ae3515fc6626102101cab1841e11ec6",
+      "tests": "Long document (492 pages): 358 outline entries, about 7,500 internal links, 226 external links, tables and lists. Slow and optional.",
+      "pages": 492
+    }
+  ],
+  "synthetic": [
+    {
+      "id": "synthetic",
+      "generator": "bench.synthetic",
+      "tests": "Generated PDF with exact ground truth: 5 headings over 3 levels, 25 list items with visible numbers and levels, 3 external and 2 internal links, 1 table, 1 image."
+    }
+  ]
+}
