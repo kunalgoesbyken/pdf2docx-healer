@@ -7,4 +7,4 @@ logger = logging.getLogger("docx_healer")
 
 def progress(verbose: bool, message: str) -> None:
     if verbose:
-        print(f"[healer] {message}")
+        print(f"[healer] {message}", flush=True)
