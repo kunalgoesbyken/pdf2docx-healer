@@ -6,15 +6,17 @@ import tempfile
 from contextlib import contextmanager, nullcontext
 from dataclasses import dataclass
 from pathlib import Path
-from typing import ContextManager, Iterator, Optional
+from typing import Any, ContextManager, Iterator, Optional
 
 from .errors import InvalidInputError
 from .files import PathLike, remove_quietly, resolve_input_pdf, resolve_output_path
 from .flow_writer import write_editable_docx
 from .log import progress
 from .ocr_pipeline import prepare_ocr_copy
+from .page_recovery import convert_with_recovery
 from .patches import list_item_patches
 from .post_processor import post_process_docx
+from .speedups import cached_image_listing
 
 MODES = ("fidelity", "editable")
 
@@ -141,15 +143,28 @@ def _root_log_level(level: Optional[int]) -> Iterator[None]:
         root.setLevel(previous)
 
 
+def _require_readable(converter: Any, pdf_path: str) -> None:
+    document = converter.fitz_doc
+    if document.needs_pass:
+        raise InvalidInputError(f"PDF is password protected: {pdf_path}")
+    if len(document) == 0:
+        raise InvalidInputError(f"PDF has no pages: {pdf_path}")
+
+
 def _convert(pdf_path: str, docx_path: str, config: HealerConfig) -> None:
     from pdf2docx import Converter
 
     progress(config.verbose, "Converting...")
     patches: ContextManager[None] = list_item_patches() if config.fix_lists else nullcontext()
-    quiet_level = None if config.verbose else logging.WARNING
-    with _root_log_level(quiet_level), patches:
+    own_progress = config.recover_pages
+    quiet_level = None if config.verbose and not own_progress else logging.WARNING
+    with _root_log_level(quiet_level), patches, cached_image_listing():
         converter = Converter(pdf_path)
         try:
-            converter.convert(docx_path)
+            _require_readable(converter, pdf_path)
+            if config.recover_pages:
+                convert_with_recovery(converter, docx_path, config.verbose)
+            else:
+                converter.convert(docx_path)
         finally:
             converter.close()
