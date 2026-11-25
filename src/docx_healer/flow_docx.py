@@ -277,7 +277,7 @@ class Emitter:
 
 
 def _usable_image(image: ImageItem) -> Optional[bytes]:
-    """Return image bytes python-docx can embed, re-encoding them as PNG when it cannot read them."""
+    """Return image bytes python-docx can embed, re-encoding as PNG when it cannot read them."""
     try:
         DocxImage.from_blob(image.data)
         return image.data

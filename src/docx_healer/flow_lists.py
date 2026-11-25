@@ -191,7 +191,8 @@ def _place_dotted(instance: ListInstance, para: Para, level: int) -> bool:
             False, "decimal", value, marker.delim, "", para.marker_x, para.text_x, dotted=True,
         )
     else:
-        if not _signature(marker, existing) or instance.counters.get(level, existing.start - 1) + 1 != value:
+        expected = instance.counters.get(level, existing.start - 1) + 1
+        if not _signature(marker, existing) or expected != value:
             return False
     for deeper in [k for k in instance.counters if k > level]:
         del instance.counters[deeper]

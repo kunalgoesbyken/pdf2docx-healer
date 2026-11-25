@@ -3,6 +3,7 @@
 import math
 import re
 from collections import Counter
+from functools import partial
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 
 from .flow_lists import next_in_chain, parse_marker
@@ -79,7 +80,8 @@ def drop_running(pages: List[PageData]) -> Running:
         page = by_number[line.page]
         entry = _running_line(where, page.width, text_pages[0].number)
         if entry is not None:
-            (running.header if line.bbox[3] <= _BAND * page.height else running.footer).append(entry)
+            top = line.bbox[3] <= _BAND * page.height
+            (running.header if top else running.footer).append(entry)
     gone = {key for key, where in images.items() if len(where) >= needed}
     for page in text_pages:
         for unit in page.units:
@@ -97,7 +99,9 @@ def _first_line(where: Dict[int, Line]) -> Line:
     return where[min(where)]
 
 
-def _running_line(where: Dict[int, Line], page_width: float, first: int) -> Optional[RunningLine]:
+def _running_line(
+    where: Dict[int, Line], page_width: float, first: int
+) -> Optional[RunningLine]:
     line = _first_line(where)
     parts = _page_parts(where)
     if parts is None:
@@ -113,7 +117,7 @@ def _running_line(where: Dict[int, Line], page_width: float, first: int) -> Opti
 
 
 def _page_parts(where: Dict[int, Line]) -> Optional[List[Optional[str]]]:
-    """Split the first occurrence at numbers that count pages; None when a number varies otherwise."""
+    """Split the first occurrence at page-counting numbers; None if another number varies."""
     texts = {number: line.text.strip() for number, line in where.items()}
     base = texts[min(texts)]
     runs = list(_DIGITS.finditer(base))
@@ -459,7 +463,10 @@ def assemble(
             cur, prev = None, None
             blocks.append(item)
             continue
-        if cur is not None and prev is not None and cur.seg == seg                 and _continues(cur, prev, item, page_width)                 and not _marker_starts(cur, item, lambda: _following(stream, index, lookahead)):
+        upcoming = partial(_following, stream, index, lookahead)
+        if cur is not None and prev is not None and cur.seg == seg \
+                and _continues(cur, prev, item, page_width) \
+                and not _marker_starts(cur, item, upcoming):
             _append_line(cur, item, vocab)
         else:
             if cur is not None:

@@ -1,7 +1,6 @@
 import logging
 
 import pymupdf
-import pytest
 from docx import Document
 from docx.oxml.ns import qn
 
