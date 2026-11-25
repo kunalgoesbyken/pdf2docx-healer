@@ -261,3 +261,41 @@ def test_nested_children_in_a_slightly_smaller_font_keep_the_parent_list(tmp_pat
 
     assert rendered(path) == ["1. parent", "a. child", "b. child", "2. parent"]
     assert [d["ilvl"] for _, d in paragraphs_info(path)] == [0, 1, 1, 0]
+
+
+def test_splitting_a_paragraph_that_ends_a_section_keeps_one_section_break(tmp_path):
+    from docx.oxml import OxmlElement
+    from docx.oxml.ns import qn
+
+    path = make(tmp_path, ["1. one \n2. two \n3. three", "next page text"])
+    doc = Document(str(path))
+    first = doc.paragraphs[0]._p
+    first.get_or_add_pPr().append(OxmlElement("w:sectPr"))
+    doc.save(str(path))
+
+    fix_lists_in_docx(path, verbose=False)
+
+    body = Document(str(path)).element.body
+    holders = [
+        p for p in body.iter(qn("w:p"))
+        if p.find(f"{qn('w:pPr')}/{qn('w:sectPr')}") is not None
+    ]
+    assert len(holders) == 1
+    assert "".join(holders[0].itertext()).strip().endswith("three")
+
+
+def test_a_list_does_not_continue_across_a_table(tmp_path):
+    doc = Document()
+    for text in ("1. alpha", "2. beta"):
+        doc.add_paragraph(text)
+    doc.add_table(rows=1, cols=1).cell(0, 0).text = "cell"
+    for text in ("3. gamma", "4. delta"):
+        doc.add_paragraph(text)
+    path = tmp_path / "in.docx"
+    doc.save(str(path))
+
+    fix_lists_in_docx(path, verbose=False)
+
+    assert rendered(path) == ["1. alpha", "2. beta", "3. gamma", "4. delta"]
+    ids = num_ids(path)
+    assert ids[0] == ids[1] and ids[2] == ids[3] and ids[0] != ids[2]

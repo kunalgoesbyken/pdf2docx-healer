@@ -201,3 +201,49 @@ def test_heal_keeps_unsafe_link_removal_with_hyperlink_pass_off(tmp_path, mode):
     targets = [rel.target_ref for rel in doc.part.rels.values() if rel.is_external]
     assert "ms-msdt:/id PCWDiagnostic" not in targets
     assert "https://example.com/" in targets
+
+
+def _shared_rid_docx(path, target, count=2, dangling=False):
+    doc = Document()
+    rid = doc.part.relate_to(target, RT.HYPERLINK, is_external=True)
+    for index in range(count):
+        paragraph = doc.add_paragraph(f"before {index} ")
+        link = OxmlElement("w:hyperlink")
+        link.set(qn("r:id"), "rId999" if dangling else rid)
+        run = paragraph.add_run(f"label {index}")
+        link.append(run._r)
+        paragraph._p.append(link)
+    doc.save(str(path))
+    return path
+
+
+def _dangling(path):
+    doc = Document(str(path))
+    rids = {link.get(qn("r:id")) for link in doc.element.body.iter(qn("w:hyperlink"))}
+    return {rid for rid in rids if rid and rid not in doc.part.rels}
+
+
+@pytest.mark.parametrize("count", [2, 3])
+def test_unsafe_links_sharing_one_relationship_are_all_unwrapped(tmp_path, count):
+    path = _shared_rid_docx(tmp_path / "in.docx", "javascript:alert(1)", count)
+
+    assert unlink_unsafe_targets(path) == count
+
+    assert _links(path) == []
+    assert not _dangling(path)
+    text = "\n".join(p.text for p in Document(str(path)).paragraphs)
+    assert all(f"label {index}" in text for index in range(count))
+
+
+def test_safe_links_sharing_one_relationship_are_kept(tmp_path):
+    path = _shared_rid_docx(tmp_path / "in.docx", "https://example.com/")
+
+    assert unlink_unsafe_targets(path) == 0
+    assert _links(path) == ["https://example.com/", "https://example.com/"]
+
+
+def test_a_link_whose_relationship_is_missing_becomes_plain_text(tmp_path):
+    path = _shared_rid_docx(tmp_path / "in.docx", "https://example.com/", count=1, dangling=True)
+
+    assert unlink_unsafe_targets(path) == 1
+    assert not list(Document(str(path)).element.body.iter(qn("w:hyperlink")))

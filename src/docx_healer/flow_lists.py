@@ -4,11 +4,11 @@ import re
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Tuple
 
-from .constants import BULLET_CODEPOINTS
+from .constants import BULLET_CODEPOINTS, WEAK_BULLETS
 from .flow_model import Block, Marker, Para
 
 _BALLOT_BOXES = frozenset({0x2610, 0x2611, 0x2612})
-_WEAK_GLYPHS = frozenset("-*+\u2013\u2014")
+_WEAK_GLYPHS = WEAK_BULLETS
 _SHAPES = range(0x25A0, 0x2600)
 _STRONG_GLYPHS = frozenset(
     chr(cp) for cp in [*BULLET_CODEPOINTS, *_SHAPES] if cp not in _BALLOT_BOXES

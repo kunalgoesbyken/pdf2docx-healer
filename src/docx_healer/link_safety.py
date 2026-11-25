@@ -32,22 +32,30 @@ def unlink_unsafe_targets(docx_path: PathLike, verbose: bool = False) -> int:
     """Lift hyperlinks nested in runs to paragraph level, then unwrap unsafe external ones.
 
     pdf2docx writes ``w:hyperlink`` inside ``w:r``, which the schema does not allow and
-    python-docx cannot read. Every unsafe external link keeps its text as plain runs.
+    python-docx cannot read. Every unsafe external link, and every link whose relationship
+    is missing or is not a hyperlink, keeps its text as plain runs. Relationships shared by
+    several links are dropped once all of them are unwrapped.
     """
     doc = Document(str(docx_path))
     part = doc.part
     removed = 0
     lifted = 0
+    unsafe_rels = set()
     for link in list(doc.element.body.iter(qn("w:hyperlink"))):
         if _lift(link):
             lifted += 1
         rid = link.get(qn("r:id"))
-        rel = part.rels.get(rid) if rid else None
-        if rel is None or rel.reltype != RT.HYPERLINK or is_safe_uri(rel.target_ref):
+        if not rid:
             continue
+        rel = part.rels.get(rid)
+        if rel is not None and rel.reltype == RT.HYPERLINK:
+            if is_safe_uri(rel.target_ref):
+                continue
+            unsafe_rels.add(rid)
         _unwrap(link)
-        part.drop_rel(rid)
         removed += 1
+    for rid in unsafe_rels:
+        part.drop_rel(rid)
     if removed or lifted:
         doc.save(str(docx_path))
     if removed:

@@ -74,14 +74,17 @@ def drop_running(pages: List[PageData]) -> Running:
                 key = _line_key(page, line)
                 if key is not None:
                     lines.setdefault(key, {}).setdefault(page.number, line)
-    repeated = {key: where for key, where in lines.items() if len(where) >= needed}
-    for where in sorted(repeated.values(), key=lambda w: _reading_key(_first_line(w))):
+    candidates = {key: where for key, where in lines.items() if len(where) >= needed}
+    repeated = set()
+    for key, where in sorted(candidates.items(), key=lambda kw: _reading_key(_first_line(kw[1]))):
         line = _first_line(where)
         page = by_number[line.page]
         entry = _running_line(where, page.width, text_pages[0].number)
-        if entry is not None:
-            top = line.bbox[3] <= _BAND * page.height
-            (running.header if top else running.footer).append(entry)
+        if entry is None:
+            continue
+        repeated.add(key)
+        top = line.bbox[3] <= _BAND * page.height
+        (running.header if top else running.footer).append(entry)
     gone = {key for key, where in images.items() if len(where) >= needed}
     for page in text_pages:
         for unit in page.units:

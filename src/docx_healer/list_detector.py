@@ -22,6 +22,7 @@ _HANGING_TWIPS = 360
 _SYMBOL_BULLET = chr(0xF0B7)
 _SHAPE_TEXT = {".": "%{n}.", ")": "%{n})", "()": "(%{n})"}
 _KEEP_WHEN_CUTTING = frozenset({qn("w:pPr"), qn("w:rPr")})
+_BLOCK_BREAKS = frozenset({qn("w:tbl"), qn("w:sdt")})
 
 
 @dataclass
@@ -132,9 +133,26 @@ def _left_indent_pt(paragraph: Paragraph) -> float:
     return indent.pt if indent is not None else 0.0
 
 
-def _scan(paragraphs: List[Paragraph], heading_ids: FrozenSet[str]) -> List[_Item]:
+def _body_paragraphs(doc: Any) -> Dict[int, Paragraph]:
+    """Map body paragraphs to slots in which a table or content control also takes a slot.
+
+    Paragraphs on either side of a table are then never adjacent, so a list never
+    continues across it.
+    """
+    slots: Dict[int, Paragraph] = {}
+    slot = 0
+    for child in doc.element.body.iterchildren():
+        if child.tag == qn("w:p"):
+            slots[slot] = Paragraph(child, doc._body)
+        elif child.tag not in _BLOCK_BREAKS:
+            continue
+        slot += 1
+    return slots
+
+
+def _scan(paragraphs: Dict[int, Paragraph], heading_ids: FrozenSet[str]) -> List[_Item]:
     items: List[_Item] = []
-    for index, paragraph in enumerate(paragraphs):
+    for index, paragraph in paragraphs.items():
         if _is_heading(paragraph, heading_ids) or _has_numbering(paragraph):
             continue
         lines = _line_texts(_text_atoms(paragraph._p))
@@ -250,6 +268,9 @@ def _split_at(p_elem: Any, line_break: Any) -> Any:
     _drop_from(line_break, p_elem, forward=True)
     _drop_from(twin, tail, forward=False)
     _strip_trailing_space(p_elem)
+    section = p_elem.find(f"{qn('w:pPr')}/{qn('w:sectPr')}")
+    if section is not None:
+        section.getparent().remove(section)
     return tail
 
 
@@ -437,7 +458,7 @@ def fix_lists_in_docx(docx_path: Any, aggressive: bool = False, verbose: bool = 
     start value. Heading paragraphs are never touched.
     """
     doc = Document(str(docx_path))
-    paragraphs = list(doc.paragraphs)
+    paragraphs = _body_paragraphs(doc)
     items = _scan(paragraphs, _heading_style_ids(doc))
     _resolve_runs(items, aggressive)
     _assign_levels(items)

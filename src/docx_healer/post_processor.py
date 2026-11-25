@@ -54,7 +54,9 @@ def post_process_docx(
     ``pdf_path`` is given. Headings run before lists so numbered headings are never
     restyled as list items. Each pass opens and saves the file on its own, so a failing
     pass leaves the file as the previous pass left it. Failures are logged as warnings
-    and listed in the returned report instead of aborting the remaining passes.
+    and listed in the returned report instead of aborting the remaining passes. The last
+    pass, which turns links to anything but web and mail addresses into plain text, always
+    runs and is not caught: if it fails, the error propagates so no unchecked file is kept.
     """
     report = PostProcessReport()
     source: PathLike = pdf_path if pdf_path is not None else ""

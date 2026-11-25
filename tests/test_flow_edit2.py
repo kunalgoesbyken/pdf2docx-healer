@@ -1,6 +1,7 @@
 import logging
 
 import pymupdf
+import pytest
 from docx import Document
 from docx.oxml.ns import qn
 
@@ -494,3 +495,40 @@ def test_a_wrapped_line_that_starts_with_a_decimal_number_stays_in_its_paragraph
     out = convert(tmp_path, build)
 
     assert len(texts(out)) == 1
+
+
+def test_repeated_margin_line_with_a_number_that_is_not_the_page_stays_in_the_body(tmp_path):
+    def build(doc):
+        for number, label in enumerate(["7", "3", "9", "4"], start=1):
+            page = new_page(doc)
+            put(page, LEFT, 36, f"Figure {label} overview")
+            put(page, LEFT, 120, f"Unique body sentence number {number} sits here alone.")
+
+    out = convert(tmp_path, build)
+
+    body = " ".join(texts(out))
+    for label in ("7", "3", "9", "4"):
+        assert f"Figure {label} overview" in body
+
+
+def test_page_numbers_offset_by_a_cover_page_are_kept_as_text(tmp_path):
+    def build(doc):
+        for number in range(1, 5):
+            page = new_page(doc)
+            put(page, 300, 790, str(number + 4))
+            put(page, LEFT, 120, f"Unique body sentence number {number} sits here alone.")
+
+    out = convert(tmp_path, build)
+
+    body = " ".join(texts(out))
+    assert all(str(number + 4) in body.split() for number in range(1, 5))
+
+
+@pytest.mark.parametrize("glyph", ["~", ">", "»", "-", "–"])
+def test_editable_and_fidelity_agree_on_weak_bullet_glyphs(glyph):
+    from docx_healer.flow_lists import parse_marker as flow_marker
+    from docx_healer.list_markers import parse_marker as fidelity_marker
+
+    text = f"{glyph} item text"
+    assert (flow_marker(text) is not None) == (fidelity_marker(text) is not None)
+    assert flow_marker(text) is not None
