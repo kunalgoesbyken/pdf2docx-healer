@@ -33,8 +33,10 @@ _DROP = 0.15
 _HEAD_CHARS = 16
 _ROW_OVERLAP = 0.6
 _ROW_GAP = 1.5
-_MIN_IMAGE_SIDE = 24.0
-_MIN_IMAGE_AREA = 1500.0
+_MIN_IMAGE_SIDE = 12.0
+_MIN_IMAGE_THICKNESS = 4.0
+_FIGURE_GAP_SHARE = 0.5
+_FIGURE_ALIGN_SHARE = 0.5
 _EDGE_TOLERANCE = 2.0
 _MIN_STROKES = 4
 _SPARSE_CELLS = 12
@@ -305,7 +307,7 @@ def _add_image(data: PageData, block: Dict[str, Any], budget: Budget) -> None:
     image = block.get("image")
     if not image:
         return
-    if (width < _MIN_IMAGE_SIDE and height < _MIN_IMAGE_SIDE) or width * height < _MIN_IMAGE_AREA:
+    if max(width, height) < _MIN_IMAGE_SIDE or min(width, height) < _MIN_IMAGE_THICKNESS:
         logger.debug("Skipped decorative image on page %d", data.number + 1)
         return
     if budget.images_left <= 0 or budget.bytes_left < len(image):
@@ -414,10 +416,13 @@ def _lines_inside(item: TableItem, data: PageData) -> List[Line]:
 
 
 def _dense(item: TableItem, inside: List[Line]) -> bool:
+    """A grid is a table when enough of the cells in its text-bearing columns hold text."""
     if len(item.cells) < _SPARSE_CELLS:
         return True
-    filled = {id(_cell_for(item, line)) for line in inside}
-    return len(filled) >= _MIN_FILLED * len(item.cells)
+    filled = {id(cell): cell for cell in (_cell_for(item, line) for line in inside)}
+    columns = {c for cell in filled.values() for c in range(cell.c0, cell.c1)}
+    live = [cell for cell in item.cells if any(c in columns for c in range(cell.c0, cell.c1))]
+    return len(filled) >= _MIN_FILLED * len(live)
 
 
 def _fill_table(item: TableItem, data: PageData, inside: List[Line]) -> None:
@@ -477,6 +482,7 @@ def _rasterise_figures(page: Any, data: PageData, budget: Budget) -> None:
         logger.debug("Vector figures skipped on page %d: %s", data.number + 1, exc)
         return
     taken = [t.bbox for t in data.tables] + [i.bbox for i in data.images]
+    clusters = _merge_clusters(clusters[: budget.limits.max_figure_clusters])
     for cluster in clusters[:_MAX_FIGURES]:
         rect = cluster * page.derotation_matrix
         box = (rect.x0, rect.y0, rect.x1, rect.y1)
@@ -505,6 +511,39 @@ def _rasterise_figures(page: Any, data: PageData, budget: Budget) -> None:
         for unit in data.units:
             unit.lines = [line for line in unit.lines if id(line) not in gone]
         data.units = [unit for unit in data.units if unit.lines]
+
+
+def _overlap_length(low_a: float, high_a: float, low_b: float, high_b: float) -> float:
+    return min(high_a, high_b) - max(low_a, low_b)
+
+
+def _adjacent(a: Any, b: Any) -> bool:
+    """True when two clusters are stacked or side by side, aligned and close together."""
+    across = _overlap_length(a.x0, a.x1, b.x0, b.x1)
+    down = _overlap_length(a.y0, a.y1, b.y0, b.y1)
+    stacked = across >= _FIGURE_ALIGN_SHARE * min(a.width, b.width)
+    beside = down >= _FIGURE_ALIGN_SHARE * min(a.height, b.height)
+    if stacked and -down <= _FIGURE_GAP_SHARE * min(a.height, b.height):
+        return True
+    return beside and -across <= _FIGURE_GAP_SHARE * min(a.width, b.width)
+
+
+def _merge_clusters(clusters: List[Any]) -> List[Any]:
+    """Join the clusters of one multi-part figure, such as stacked subplots, into one."""
+    merged = [pymupdf.Rect(c) for c in clusters]
+    changed = True
+    while changed:
+        changed = False
+        for first in range(len(merged)):
+            for second in range(first + 1, len(merged)):
+                if _adjacent(merged[first], merged[second]):
+                    merged[first] = merged[first] | merged[second]
+                    del merged[second]
+                    changed = True
+                    break
+            if changed:
+                break
+    return sorted(merged, key=lambda r: (r.y0, r.x0))
 
 
 def _curved(item: Any) -> bool:

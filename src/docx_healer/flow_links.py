@@ -32,9 +32,8 @@ def resolve_anchors(blocks: List[Block], body: float) -> Dict[LinkKey, str]:
         if span.link is not None and span.link[0] == "goto"
     }
     by_page: Dict[int, List[Para]] = {}
-    for block in blocks:
-        if isinstance(block, Para):
-            by_page.setdefault(block.page, []).append(block)
+    for para in iter_paras(blocks):
+        by_page.setdefault(para.page, []).append(para)
     anchors: Dict[LinkKey, str] = {}
     created = 0
     for key in sorted(keys, key=str):

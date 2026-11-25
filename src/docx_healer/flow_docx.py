@@ -8,6 +8,7 @@ import pymupdf
 from docx.document import Document as DocumentType
 from docx.enum.style import WD_STYLE_TYPE
 from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.image.image import Image as DocxImage
 from docx.opc.constants import RELATIONSHIP_TYPE as RT
 from docx.oxml import OxmlElement, parse_xml
 from docx.oxml.ns import nsdecls, qn
@@ -15,7 +16,7 @@ from docx.shared import Pt, RGBColor
 from docx.text.paragraph import Paragraph
 
 from .flow_lists import LevelDef, ListInstance, level_indents
-from .flow_model import ImageItem, LinkKey, Para, Span, TableItem
+from .flow_model import ImageItem, LinkKey, Para, Running, RunningLine, Span, TableItem
 from .flow_text import is_rtl_char
 from .font_mapper import normalize_font_name
 from .log import logger
@@ -84,7 +85,7 @@ def _level_xml(index: int, level: Optional[LevelDef], base: LevelDef, margin: fl
         start = 1
     else:
         fmt = level.fmt
-        text = level.glyph if level.bullet else level.delim.replace("%", f"%{index + 1}")
+        text = level.glyph if level.bullet else _level_text(level, index)
         left, hanging = level_indents(level, margin)
         start = level.start
     return (
@@ -92,6 +93,11 @@ def _level_xml(index: int, level: Optional[LevelDef], base: LevelDef, margin: fl
         f'<w:lvlText w:val="{escape(text)}"/><w:lvlJc w:val="left"/>'
         f'<w:pPr><w:ind w:left="{left}" w:hanging="{hanging}"/></w:pPr></w:lvl>'
     )
+
+
+def _level_text(level: LevelDef, index: int) -> str:
+    ancestors = "".join(f"%{k + 1}." for k in range(index)) if level.dotted else ""
+    return ancestors + level.delim.replace("%", f"%{index + 1}")
 
 
 class Emitter:
@@ -271,8 +277,12 @@ class Emitter:
 
 
 def _usable_image(image: ImageItem) -> Optional[bytes]:
-    if image.ext.lower() in ("png", "jpeg", "jpg", "gif", "bmp", "tiff", "tif"):
+    """Return image bytes python-docx can embed, re-encoding them as PNG when it cannot read them."""
+    try:
+        DocxImage.from_blob(image.data)
         return image.data
+    except Exception as exc:
+        logger.debug("Re-encoding an image python-docx cannot read (%s): %s", image.ext, exc)
     try:
         pixmap = pymupdf.Pixmap(image.data)
         if pixmap.colorspace is None or pixmap.colorspace.n != 3 or pixmap.alpha:
@@ -293,3 +303,58 @@ def _complex_fonts(run: Any, span: Span) -> None:
 
 def _set_bidi(ppr: Any) -> None:
     ppr.insert_element_before(OxmlElement("w:bidi"), *_BIDI_SUCCESSORS)
+
+
+_ALIGNMENTS = {
+    "left": WD_ALIGN_PARAGRAPH.LEFT,
+    "center": WD_ALIGN_PARAGRAPH.CENTER,
+    "right": WD_ALIGN_PARAGRAPH.RIGHT,
+}
+
+
+def write_running(section: Any, running: Running, body: float) -> None:
+    """Write the repeating lines into the section's Word header and footer parts."""
+    for part, lines in ((section.header, running.header), (section.footer, running.footer)):
+        _fill_part(part, lines, body)
+        first = [line for line in lines if line.first_page]
+        if len(first) != len(lines):
+            section.different_first_page_header_footer = True
+    first_header = section.first_page_header
+    first_footer = section.first_page_footer
+    if section.different_first_page_header_footer:
+        _fill_part(first_header, [x for x in running.header if x.first_page], body)
+        _fill_part(first_footer, [x for x in running.footer if x.first_page], body)
+
+
+def _fill_part(part: Any, lines: List[RunningLine], body: float) -> None:
+    if not lines:
+        return
+    part.is_linked_to_previous = False
+    for index, line in enumerate(lines):
+        paragraph = part.paragraphs[0] if index == 0 else part.add_paragraph()
+        paragraph.alignment = _ALIGNMENTS[line.align]
+        if line.rtl:
+            _set_bidi(paragraph._p.get_or_add_pPr())
+        for piece in line.parts:
+            if piece is None:
+                _page_field(paragraph, line, body)
+                continue
+            run = paragraph.add_run(piece)
+            _style_run(run, line, body)
+            if line.rtl:
+                run.font.rtl = True
+
+
+def _style_run(run: Any, line: RunningLine, body: float) -> None:
+    run.bold = True if line.bold else None
+    if abs(line.size / body - 1) > _RELATIVE_SIZE:
+        run.font.size = Pt(round(line.size * 2) / 2)
+
+
+def _page_field(paragraph: Paragraph, line: RunningLine, body: float) -> None:
+    field = OxmlElement("w:fldSimple")
+    field.set(qn("w:instr"), " PAGE ")
+    run = paragraph.add_run("1")
+    _style_run(run, line, body)
+    field.append(run._r)
+    paragraph._p.append(field)

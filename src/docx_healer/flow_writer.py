@@ -9,7 +9,7 @@ from docx.shared import Pt
 from . import flow_extract
 from .errors import InvalidInputError
 from .files import PathLike
-from .flow_docx import Emitter
+from .flow_docx import Emitter, write_running
 from .flow_headings import OutlineEntry, assign_headings
 from .flow_layout import (
     assemble,
@@ -23,7 +23,7 @@ from .flow_layout import (
 )
 from .flow_links import resolve_anchors
 from .flow_lists import ListInstance, apply_lists
-from .flow_model import Block, Budget, FlowLimits, PageData, Para, TableItem
+from .flow_model import Block, Budget, FlowLimits, PageData, Para, Running, TableItem
 from .flow_text import clean_text, vocabulary
 from .log import logger, progress
 
@@ -32,6 +32,7 @@ _MAX_MARGIN = 144.0
 _CENTER_SHARE = 0.05
 _MAX_TITLE = 255
 _WIDE_IMAGE = 0.9
+_MAX_PAGE_POINTS = 1584.0
 
 
 def write_editable_docx(
@@ -46,8 +47,8 @@ def write_editable_docx(
         pages = _extract_pages(pdf, budget, verbose)
         toc = _outline(pdf, budget.limits.max_outline_entries)
         title = (pdf.metadata or {}).get("title") or ""
-    blocks, instances, size = _build_blocks(pages, toc)
-    _write(blocks, instances, pages, size, title, docx_path)
+    blocks, instances, size, running = _build_blocks(pages, toc, budget.limits)
+    _write(blocks, instances, pages, size, title, running, docx_path)
     progress(verbose, f"Editable document written ({len(blocks)} blocks)")
 
 
@@ -66,8 +67,9 @@ def _extract_pages(pdf: Any, budget: Budget, verbose: bool) -> List[PageData]:
             logger.debug("Page %d failure details", index + 1, exc_info=True)
             continue
         if not data.has_text:
-            logger.warning("Page %d has no text (scanned or blank), skipped", index + 1)
-            data.images = []
+            logger.warning(
+                "Page %d has no text (scanned or blank); only its images are kept", index + 1
+            )
         pages.append(data)
         progress(verbose and index % 25 == 0, f"Read page {index + 1}")
     return pages
@@ -109,27 +111,27 @@ def _line_groups(pages: List[PageData]) -> List[List[str]]:
 
 
 def _build_blocks(
-    pages: List[PageData], toc: List[OutlineEntry]
-) -> Tuple[List[Block], List[ListInstance], float]:
-    drop_running(pages)
+    pages: List[PageData], toc: List[OutlineEntry], limits: FlowLimits
+) -> Tuple[List[Block], List[ListInstance], float, Running]:
+    running = drop_running(pages)
     size = body_size(pages)
     vocab: Set[str] = vocabulary(_line_groups(pages))
     blocks: List[Block] = []
     for page in pages:
         try:
-            blocks.extend(_page_blocks(page, size, vocab))
+            blocks.extend(_page_blocks(page, size, vocab, limits.max_marker_lookahead))
         except Exception as exc:
             logger.warning("Skipped page %d: %s", page.number + 1, exc)
             logger.debug("Page %d failure details", page.number + 1, exc_info=True)
     blocks = join_across_segments(blocks, vocab)
     assign_headings([b for b in blocks if isinstance(b, Para)], toc, size)
     instances = apply_lists(blocks)
-    return merge_tables(blocks), instances, size
+    return merge_tables(blocks), instances, size, running
 
 
-def _page_blocks(page: PageData, size: float, vocab: Set[str]) -> List[Block]:
+def _page_blocks(page: PageData, size: float, vocab: Set[str], lookahead: int) -> List[Block]:
     drop_backgrounds(page)
-    blocks = assemble(order_page(page, size), vocab, page.width)
+    blocks = assemble(order_page(page, size), vocab, page.width, lookahead)
     for block in blocks:
         if isinstance(block, TableItem):
             fill_cells(block, vocab, page.width)
@@ -151,24 +153,27 @@ def _clamp(value: float) -> float:
 
 def _write(
     blocks: List[Block], instances: List[ListInstance], pages: List[PageData], size: float,
-    title: str, docx_path: PathLike,
+    title: str, running: Running, docx_path: PathLike,
 ) -> None:
     doc = Document()
     page = pages[0] if pages else PageData(0, 595.0, 842.0)
     left, right = _margins(blocks, page)
+    scale = min(1.0, _MAX_PAGE_POINTS / max(page.width, page.height, 1.0))
     section = doc.sections[0]
-    section.page_width, section.page_height = Pt(page.width), Pt(page.height)
-    section.left_margin, section.right_margin = Pt(left), Pt(right)
-    section.top_margin = section.bottom_margin = Pt(_MIN_MARGIN * 1.5)
+    section.page_width, section.page_height = Pt(page.width * scale), Pt(page.height * scale)
+    section.left_margin, section.right_margin = Pt(left * scale), Pt(right * scale)
+    section.top_margin = section.bottom_margin = Pt(_MIN_MARGIN * 1.5 * scale)
     if title:
         doc.core_properties.title = clean_text(title)[:_MAX_TITLE]
-    text_width = page.width - left - right
+    body_width = page.width - left - right
+    text_width = body_width * scale
     anchors = resolve_anchors(blocks, size)
-    emitter = Emitter(doc, size, text_width, page.width, anchors)
+    emitter = Emitter(doc, size, text_width, page.width * scale, anchors)
     emitter.register_instances(instances, left)
+    write_running(section, running, size)
     for block in blocks:
         try:
-            _emit(emitter, doc, block, page.width, text_width)
+            _emit(emitter, doc, block, page.width, body_width)
         except Exception as exc:
             logger.warning("Skipped a block on page %d: %s", block.page + 1, exc)
             logger.debug("Block failure details", exc_info=True)

@@ -3,10 +3,23 @@
 import math
 import re
 from collections import Counter
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 
-from .flow_lists import parse_marker
-from .flow_model import Block, Line, PageData, Para, Rect, Span, TableItem, Unit, union
+from .flow_lists import next_in_chain, parse_marker
+from .flow_model import (
+    Block,
+    Line,
+    Marker,
+    PageData,
+    Para,
+    Rect,
+    Running,
+    RunningLine,
+    Span,
+    TableItem,
+    Unit,
+    union,
+)
 from .flow_text import join_decision, strong_direction
 
 Seg = Tuple[Any, ...]
@@ -32,34 +45,99 @@ _START_TOKENS = {
     ("decimal", 1), ("lowerLetter", 1), ("upperLetter", 1), ("lowerRoman", 1), ("upperRoman", 1),
 }
 _BACKGROUND_SHARE = 0.9
+_DEFAULT_LOOKAHEAD = 40
+_DIGITS = re.compile(r"\d+")
+_ALIGN_CENTER = 0.05
+_ALIGN_RIGHT = 0.5
 
 
 def _normalise(text: str) -> str:
     return re.sub(r"\d+", "#", text.strip())
 
 
-def drop_running(pages: List[PageData]) -> int:
+def drop_running(pages: List[PageData]) -> Running:
     """Remove lines and images that repeat at the same position on many pages."""
     text_pages = [p for p in pages if p.units]
+    running = Running()
     if len(text_pages) < 2:
-        return 0
+        return running
     needed = max(2, math.ceil(_REPEAT_SHARE * len(text_pages)))
-    seen: Dict[Tuple[Any, ...], Set[int]] = {}
-    for page in pages:
-        for key in _running_keys(page):
-            seen.setdefault(key, set()).add(page.number)
-    repeated = {key for key, where in seen.items() if len(where) >= needed}
-    dropped = 0
-    for page in pages:
+    by_number = {p.number: p for p in text_pages}
+    lines: Dict[Tuple[Any, ...], Dict[int, Line]] = {}
+    images: Dict[Tuple[Any, ...], Set[int]] = {}
+    for page in text_pages:
+        for img in page.images:
+            images.setdefault(img.key, set()).add(page.number)
         for unit in page.units:
-            kept = [line for line in unit.lines if _line_key(page, line) not in repeated]
-            dropped += len(unit.lines) - len(kept)
-            unit.lines = kept
+            for line in unit.lines:
+                key = _line_key(page, line)
+                if key is not None:
+                    lines.setdefault(key, {}).setdefault(page.number, line)
+    repeated = {key: where for key, where in lines.items() if len(where) >= needed}
+    for where in sorted(repeated.values(), key=lambda w: _reading_key(_first_line(w))):
+        line = _first_line(where)
+        page = by_number[line.page]
+        entry = _running_line(where, page.width, text_pages[0].number)
+        if entry is not None:
+            (running.header if line.bbox[3] <= _BAND * page.height else running.footer).append(entry)
+    gone = {key for key, where in images.items() if len(where) >= needed}
+    for page in text_pages:
+        for unit in page.units:
+            unit.lines = [line for line in unit.lines if _line_key(page, line) not in repeated]
         page.units = [unit for unit in page.units if unit.lines]
-        images = [img for img in page.images if img.key not in repeated]
-        dropped += len(page.images) - len(images)
-        page.images = images
-    return dropped
+        page.images = [img for img in page.images if img.key not in gone]
+    return running
+
+
+def _reading_key(line: Line) -> Tuple[float, float]:
+    return (line.bbox[1], line.bbox[0])
+
+
+def _first_line(where: Dict[int, Line]) -> Line:
+    return where[min(where)]
+
+
+def _running_line(where: Dict[int, Line], page_width: float, first: int) -> Optional[RunningLine]:
+    line = _first_line(where)
+    parts = _page_parts(where)
+    if parts is None:
+        return None
+    middle = (line.bbox[0] + line.bbox[2]) / 2
+    if abs(middle - page_width / 2) < _ALIGN_CENTER * page_width:
+        align = "center"
+    else:
+        align = "right" if line.bbox[0] > _ALIGN_RIGHT * page_width else "left"
+    return RunningLine(
+        parts, line.size, line.bold, align, strong_direction(line.text) == "rtl", first in where
+    )
+
+
+def _page_parts(where: Dict[int, Line]) -> Optional[List[Optional[str]]]:
+    """Split the first occurrence at numbers that count pages; None when a number varies otherwise."""
+    texts = {number: line.text.strip() for number, line in where.items()}
+    base = texts[min(texts)]
+    runs = list(_DIGITS.finditer(base))
+    tracked: List[bool] = []
+    for index in range(len(runs)):
+        values = {number: _DIGITS.findall(text)[index] for number, text in texts.items()}
+        if len(set(values.values())) == 1:
+            tracked.append(False)
+            continue
+        try:
+            follows = all(int(value) == number + 1 for number, value in values.items())
+        except ValueError:
+            return None
+        if not follows:
+            return None
+        tracked.append(True)
+    parts: List[Optional[str]] = []
+    cursor = 0
+    for match, is_page in zip(runs, tracked):
+        if is_page:
+            parts.extend([base[cursor:match.start()], None])
+            cursor = match.end()
+    parts.append(base[cursor:])
+    return [part for part in parts if part != ""]
 
 
 def _in_margin(page: PageData, line: Line) -> bool:
@@ -70,16 +148,6 @@ def _line_key(page: PageData, line: Line) -> Optional[Tuple[Any, ...]]:
     if not _in_margin(page, line):
         return None
     return ("line", _normalise(line.text), round(line.bbox[1] / 6))
-
-
-def _running_keys(page: PageData) -> Set[Tuple[Any, ...]]:
-    keys: Set[Tuple[Any, ...]] = {img.key for img in page.images}
-    for unit in page.units:
-        for line in unit.lines:
-            key = _line_key(page, line)
-            if key is not None:
-                keys.add(key)
-    return keys
 
 
 def body_size(pages: List[PageData]) -> float:
@@ -156,7 +224,7 @@ def _column(rect: Rect, gutters: List[Tuple[float, float]]) -> int:
     return sum(1 for low, high in gutters if (low + high) / 2 < center)
 
 
-def _row_sort(items: List[Any]) -> List[Any]:
+def _row_sort(items: List[Any], rtl: bool = False) -> List[Any]:
     rows: List[List[Any]] = []
     firsts: List[Rect] = []
     for item in sorted(items, key=lambda i: (i.bbox[1], i.bbox[0])):
@@ -168,12 +236,13 @@ def _row_sort(items: List[Any]) -> List[Any]:
                 continue
         rows.append([item])
         firsts.append(item.bbox)
-    return [item for row in rows for item in sorted(row, key=lambda i: i.bbox[0])]
+    return [item for row in rows for item in sorted(row, key=lambda i: i.bbox[0], reverse=rtl)]
 
 
 def order_page(page: PageData, size: float) -> List[Tuple[Any, Seg]]:
     """Return the page items in reading order, each tagged with its column segment."""
     flow = [u for u in page.units if not u.rotated]
+    rtl = strong_direction(" ".join(line.text for unit in flow for line in unit.lines)) == "rtl"
     items: List[Any] = flow + list(page.tables) + list(page.images)
     gutters = _gutters(flow, size, [t.bbox for t in page.tables] + [i.bbox for i in page.images])
     ordered: List[Tuple[Any, Seg]] = []
@@ -185,8 +254,8 @@ def order_page(page: PageData, size: float) -> List[Tuple[Any, Seg]]:
         by_column: Dict[int, List[Any]] = {}
         for item in run:
             by_column.setdefault(_column(item.bbox, gutters), []).append(item)
-        for column in sorted(by_column):
-            for item in _row_sort(by_column[column]):
+        for column in sorted(by_column, reverse=rtl):
+            for item in _row_sort(by_column[column], rtl):
                 ordered.append((item, (page.number, runs, column)))
         run = []
         runs += 1
@@ -211,7 +280,22 @@ def _text_x(line: Line, length: int) -> float:
     return line.bbox[0] + 18.0
 
 
-def _marker_starts(cur: Optional[Para], line: Line) -> bool:
+def _sibling_follows(marker: Marker, line: Line, upcoming: List[Any]) -> bool:
+    """True when the next marker at the same indent is the next number of the same list."""
+    wanted = {(fmt, value + 1) for fmt, value in marker.interps}
+    tolerance = _INDENT * line.size
+    for later in upcoming:
+        if not isinstance(later, Line) or later.bbox[0] < line.bbox[0] - tolerance:
+            return False
+        other = parse_marker(later.text.lstrip())
+        if other is not None and abs(later.bbox[0] - line.bbox[0]) <= tolerance:
+            return other.delim == marker.delim and any(i in wanted for i in other.interps)
+    return False
+
+
+def _marker_starts(
+    cur: Optional[Para], line: Line, upcoming: Callable[[], List[Any]]
+) -> bool:
     marker = parse_marker(line.text.lstrip())
     if marker is None or strong_direction(line.text) == "rtl" or cur is None:
         return False
@@ -221,8 +305,10 @@ def _marker_starts(cur: Optional[Para], line: Line) -> bool:
         return cur.marker is not None and cur.marker.bullet
     starts = any(interp in _START_TOKENS for interp in marker.interps)
     if cur.marker is not None and not cur.marker.bullet:
-        return starts or cur.marker.delim == marker.delim
-    return starts and _TERMINAL.search(cur.last_line_text.rstrip()) is not None
+        return starts or cur.marker.delim == marker.delim or next_in_chain(cur.marker, marker)
+    if _TERMINAL.search(cur.last_line_text.rstrip()) is None:
+        return False
+    return starts or _sibling_follows(marker, line, upcoming())
 
 
 def _continues(cur: Para, prev: Line, line: Line, page_width: float) -> bool:
@@ -353,23 +439,27 @@ def _glue_markers(stream: List[Tuple[Any, Seg]]) -> List[Tuple[Any, Seg]]:
     return glued
 
 
+def _following(stream: List[Tuple[Any, Seg]], index: int, limit: int) -> List[Any]:
+    return [entry[0] for entry in stream[index + 1 : index + 1 + limit]]
+
+
 def assemble(
-    items: List[Tuple[Any, Seg]], vocab: Set[str], page_width: float
+    items: List[Tuple[Any, Seg]], vocab: Set[str], page_width: float,
+    lookahead: int = _DEFAULT_LOOKAHEAD,
 ) -> List[Block]:
     """Turn ordered items into paragraphs, tables and images."""
     blocks: List[Block] = []
     cur: Optional[Para] = None
     prev: Optional[Line] = None
-    for item, seg in _glue_markers(_flat(items)):
+    stream = _glue_markers(_flat(items))
+    for index, (item, seg) in enumerate(stream):
         if not isinstance(item, Line):
             if cur is not None:
                 finish_para(cur)
             cur, prev = None, None
             blocks.append(item)
             continue
-        if cur is not None and prev is not None and cur.seg == seg \
-                and _continues(cur, prev, item, page_width) \
-                and not _marker_starts(cur, item):
+        if cur is not None and prev is not None and cur.seg == seg                 and _continues(cur, prev, item, page_width)                 and not _marker_starts(cur, item, lambda: _following(stream, index, lookahead)):
             _append_line(cur, item, vocab)
         else:
             if cur is not None:
@@ -485,6 +575,9 @@ def _absorb(first: TableItem, second: TableItem) -> None:
 
 
 def drop_backgrounds(page: PageData) -> None:
+    """Remove page-sized images behind text; a page without text keeps them, as a scan is one."""
+    if not page.has_text:
+        return
     area = page.width * page.height
     page.images = [
         img for img in page.images

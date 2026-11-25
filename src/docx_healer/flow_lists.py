@@ -15,6 +15,7 @@ _STRONG_GLYPHS = frozenset(
 ) - _WEAK_GLYPHS
 _PRIVATE_USE = (0xE000, 0xF8FF)
 _NUMBER = re.compile(r"^(?P<open>\()?(?P<tok>\d{1,3}|[A-Za-z]{1,6})(?P<close>[.)])(?=\s)\s*")
+_DOTTED = re.compile(r"^(?P<path>\d{1,3}(?:\.\d{1,3})+)(?P<close>[.)])?(?=\s)\s*")
 _ROMAN_VALUES = {"i": 1, "v": 5, "x": 10, "l": 50, "c": 100, "d": 500, "m": 1000}
 _MAX_LEVEL = 8
 _MIN_INDENT_TWIPS = 200
@@ -41,6 +42,11 @@ def parse_marker(text: str) -> Optional[Marker]:
         private = _PRIVATE_USE[0] <= code <= _PRIVATE_USE[1]
         glyph = "\u2022" if private or first == "\u00b7" else first
         return Marker(True, not strong, [], "", glyph, length)
+    dotted = _DOTTED.match(text)
+    if dotted is not None and text[dotted.end():].strip():
+        path = tuple(int(part) for part in dotted.group("path").split("."))
+        delim = "%" + (dotted.group("close") or "")
+        return Marker(False, False, [("decimal", path[-1])], delim, "", dotted.end(), path)
     match = _NUMBER.match(text)
     if match is None or not text[match.end():].strip():
         return None
@@ -52,6 +58,24 @@ def parse_marker(text: str) -> Optional[Marker]:
         return None
     delim = "(%)" if opened else f"%{close}"
     return Marker(False, False, interps, delim, "", match.end())
+
+
+def marker_path(marker: Marker) -> Optional[Tuple[int, ...]]:
+    """Return the decimal number path of a marker, such as (1, 2) for 1.2, or None."""
+    if marker.path:
+        return marker.path
+    for fmt, value in marker.interps:
+        if fmt == "decimal":
+            return (value,)
+    return None
+
+
+def next_in_chain(previous: Marker, following: Marker) -> bool:
+    """True when ``following`` can come right after ``previous`` in one dotted outline."""
+    before, after = marker_path(previous), marker_path(following)
+    if before is None or after is None or not (previous.path or following.path):
+        return False
+    return after[:-1] == before[: len(after) - 1] and len(after) <= len(before) + 1
 
 
 def _roman(token: str) -> Optional[int]:
@@ -104,6 +128,7 @@ class LevelDef:
     glyph: str
     marker_x: float
     text_x: float
+    dotted: bool = False
 
 
 @dataclass
@@ -121,16 +146,20 @@ def _levels_for(region: List[Para], size: float) -> List[int]:
     for x in xs:
         if not clusters or x - clusters[-1] > _LEVEL_TOLERANCE * size:
             clusters.append(x)
-    return [
+    levels = [
         max(i for i, c in enumerate(clusters) if c <= p.marker_x + _LEVEL_TOLERANCE * size)
         for p in region
+    ]
+    return [
+        len(p.marker.path) - 1 if p.marker is not None and p.marker.path else level
+        for p, level in zip(region, levels)
     ]
 
 
 def _signature(marker: Marker, level: LevelDef) -> bool:
     if marker.bullet:
         return level.bullet and level.glyph == marker.glyph
-    return (not level.bullet) and level.delim == marker.delim
+    return (not level.bullet) and level.dotted == bool(marker.path) and level.delim == marker.delim
 
 
 def _next_sibling_fits(
@@ -145,10 +174,37 @@ def _next_sibling_fits(
     return False
 
 
+def _place_dotted(instance: ListInstance, para: Para, level: int) -> bool:
+    """Place a dotted item such as 1.2 under counters that spell the same parent numbers."""
+    marker = para.marker
+    assert marker is not None
+    for depth, number in enumerate(marker.path[:-1]):
+        parent = instance.levels.get(depth)
+        if parent is None or parent.bullet or parent.fmt != "decimal":
+            return False
+        if instance.counters.get(depth) != number:
+            return False
+    existing = instance.levels.get(level)
+    value = marker.path[-1]
+    if existing is None:
+        instance.levels[level] = LevelDef(
+            False, "decimal", value, marker.delim, "", para.marker_x, para.text_x, dotted=True,
+        )
+    else:
+        if not _signature(marker, existing) or instance.counters.get(level, existing.start - 1) + 1 != value:
+            return False
+    for deeper in [k for k in instance.counters if k > level]:
+        del instance.counters[deeper]
+    instance.counters[level] = value
+    return True
+
+
 def _place(instance: ListInstance, para: Para, level: int, region: List[Para],
            levels: List[int], index: int) -> bool:
     marker = para.marker
     assert marker is not None
+    if marker.path:
+        return _place_dotted(instance, para, level)
     existing = instance.levels.get(level)
     if marker.bullet:
         if existing is None:
@@ -195,7 +251,7 @@ def plan_region(region: List[Para], size: float) -> List[ListInstance]:
         if current is not None and _place(current, para, level, region, levels, index):
             current.members.append((para, level))
             continue
-        if current is not None and level > min(m[1] for m in current.members):
+        if current is not None and current.members and level > min(m[1] for m in current.members):
             continue
         current = ListInstance()
         instances.append(current)

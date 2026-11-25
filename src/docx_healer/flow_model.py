@@ -21,6 +21,8 @@ class FlowLimits:
     max_drawing_items: int = 200000
     max_image_pixels: int = 50_000_000
     max_table_cells: int = 20000
+    max_marker_lookahead: int = 40
+    max_figure_clusters: int = 200
 
 
 @dataclass
@@ -165,6 +167,7 @@ class Marker:
     delim: str
     glyph: str
     length: int
+    path: Tuple[int, ...] = ()
 
 
 @dataclass
@@ -202,3 +205,23 @@ def union(rects: List[Rect]) -> Rect:
 
 
 Block = Union[Para, TableItem, ImageItem]
+
+
+@dataclass
+class RunningLine:
+    """A header or footer line that repeats across pages; a None part is the page number."""
+
+    parts: List[Optional[str]]
+    size: float
+    bold: bool
+    align: str
+    rtl: bool
+    first_page: bool
+
+
+@dataclass
+class Running:
+    """Repeating header and footer lines removed from the page bodies."""
+
+    header: List[RunningLine] = field(default_factory=list)
+    footer: List[RunningLine] = field(default_factory=list)

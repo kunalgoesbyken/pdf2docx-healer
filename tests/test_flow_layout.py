@@ -32,7 +32,7 @@ def test_blank_pdf_gives_a_valid_empty_document(tmp_path):
     assert texts(out) == []
 
 
-def test_page_with_only_an_image_emits_nothing_and_warns(tmp_path, caplog):
+def test_page_with_only_an_image_keeps_the_image_and_warns(tmp_path, caplog):
     def build(doc):
         page = new_page(doc)
         page.insert_image(pymupdf.Rect(72, 100, 372, 400), stream=png_bytes(300, 300))
@@ -40,7 +40,7 @@ def test_page_with_only_an_image_emits_nothing_and_warns(tmp_path, caplog):
     with caplog.at_level(logging.WARNING, logger="docx_healer"):
         out = convert(tmp_path, build)
 
-    assert len(Document(str(out)).inline_shapes) == 0
+    assert len(Document(str(out)).inline_shapes) == 1
     assert texts(out) == []
     assert "no text" in caplog.text.lower()
 
