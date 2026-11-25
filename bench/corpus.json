@@ -92,12 +92,12 @@
     {
       "id": "he-wikimedia-article",
       "category": "rtl-hebrew",
-      "title": "Hebrew article exported from Hebrew Wikipedia (Commons file 2.3 6-215)",
+      "title": "Hebrew report from the Samuel Neaman Institute (Wikimedia Commons file 2.3 6-215)",
       "url": "https://upload.wikimedia.org/wikipedia/commons/9/9c/2.3_6-215_%D7%A4%D7%96%D7%99_%D7%91%D7%91%D7%A9%D7%A2%D7%A8_15.4.2005_-_%D7%9E%D7%90%D7%9E%D7%A8%D7%95_%D7%A9%D7%9C_%D7%A4%D7%96%D7%99_%D7%91%D7%91%D7%A9%D7%A2%D7%A8_%D7%94%D7%9E%D7%A1%D7%9B%D7%9D_%D7%90%D7%AA_%D7%9E%D7%94%D7%9C%D7%9B%D7%99%D7%95_%D7%9C%D7%A4%D7%99%D7%AA%D7%95%D7%97_%D7%94%D7%9E%D7%9B%D7%9C%D7%9C%D7%95%D7%AA_%D7%94%D7%90%D7%A7%D7%93%D7%9E%D7%99%D7%95%D7%AA_%D7%94%D7%9E%D7%AA%D7%95%D7%A7%D7%A6%D7%91%D7%95%D7%AA.pdf",
       "source_page": "https://commons.wikimedia.org/wiki/File:2.3_6-215_%D7%A4%D7%96%D7%99_%D7%91%D7%91%D7%A9%D7%A2%D7%A8_15.4.2005_-_%D7%9E%D7%90%D7%9E%D7%A8%D7%95_%D7%A9%D7%9C_%D7%A4%D7%96%D7%99_%D7%91%D7%91%D7%A9%D7%A2%D7%A8_%D7%94%D7%9E%D7%A1%D7%9B%D7%9D_%D7%90%D7%AA_%D7%9E%D7%94%D7%9C%D7%9B%D7%99%D7%95_%D7%9C%D7%A4%D7%99%D7%AA%D7%95%D7%97_%D7%94%D7%9E%D7%9B%D7%9C%D7%9C%D7%95%D7%AA_%D7%94%D7%90%D7%A7%D7%93%D7%9E%D7%99%D7%95%D7%AA_%D7%94%D7%9E%D7%AA%D7%95%D7%A7%D7%A6%D7%91%D7%95%D7%AA.pdf",
       "license": "CC BY-SA 4.0",
       "sha256": "e79df06d1a770bffa50a8abea0ef540e71e0baef5654f9688cd3803eda5d27e7",
-      "tests": "Hebrew right-to-left running text over eight pages with footnote-style numbers.",
+      "tests": "Hebrew right-to-left running text over eight pages, Hebrew-only paragraphs with a few Latin words.",
       "pages": 8
     },
     {
@@ -108,7 +108,7 @@
       "source_page": "https://commons.wikimedia.org/wiki/File:M.A._Hindi_Syllabus_Mizoram_University.pdf",
       "license": "Public domain (as declared on the Wikimedia Commons file page)",
       "sha256": "895aa38d54002a1f7a1f0cd43bce9e22c470063e79efc03fdeea9c5f299cb9bf",
-      "tests": "Devanagari text with combining vowel signs and conjuncts, course tables, numbered units.",
+      "tests": "Devanagari text with combining vowel signs and conjuncts, mixed with English, and a large course table.",
       "pages": 36
     },
     {
@@ -131,7 +131,7 @@
       "source_page": "https://commons.wikimedia.org/wiki/File:Wikimedia_Israel_Financial_Statements_2012.pdf",
       "license": "CC BY-SA 3.0",
       "sha256": "c07c7faf97700374a062f3060752ee3af6628464477ea536890846a5cd5ec30c",
-      "tests": "Table-heavy statement: six ruled tables of figures, totals rows, notes with numbered items (invoice-like layout).",
+      "tests": "Table-heavy financial statement (balance sheet style): six ruled tables of figures with totals, English text.",
       "pages": 10
     },
     {
