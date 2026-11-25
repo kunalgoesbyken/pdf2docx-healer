@@ -36,6 +36,17 @@ def build_parser() -> argparse.ArgumentParser:
                         help="Skip hyperlink extraction")
     parser.add_argument("--no-font-fix", action="store_true",
                         help="Skip CJK font fallback mapping")
+    parser.add_argument("--no-headings", action="store_true",
+                        help="Skip heading styles from the PDF outline and font sizes")
+    parser.add_argument("--no-internal-links", action="store_true",
+                        help="Skip internal links (citations, cross references)")
+    parser.add_argument("--no-table-fix", action="store_true",
+                        help="Keep layout tables that pdf2docx creates where the PDF has none")
+    parser.add_argument("--no-page-recovery", action="store_true",
+                        help="Do not rebuild pages that pdf2docx fails to convert")
+    parser.add_argument("--mode", choices=("fidelity", "editable"), default="fidelity",
+                        help="fidelity keeps the page layout (pdf2docx); editable builds a "
+                             "reflowing document with real headings, lists and tables")
     parser.add_argument("--aggressive", action="store_true",
                         help="Use aggressive paragraph splitting for list detection")
     parser.add_argument("-q", "--quiet", action="store_true",
@@ -56,6 +67,11 @@ def main(argv: Optional[List[str]] = None) -> int:
             fix_lists=not args.no_lists,
             fix_hyperlinks=not args.no_hyperlinks,
             fix_fonts=not args.no_font_fix,
+            fix_headings=not args.no_headings,
+            fix_internal_links=not args.no_internal_links,
+            fix_tables=not args.no_table_fix,
+            recover_pages=not args.no_page_recovery,
+            mode=args.mode,
             aggressive_lists=args.aggressive,
             verbose=not args.quiet,
         )
