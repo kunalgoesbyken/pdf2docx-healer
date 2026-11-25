@@ -38,3 +38,7 @@ _build/
 # Local secrets (never commit)
 .pypirc
 .env
+
+# Benchmark downloads and results
+bench/.cache/
+bench/results/
