@@ -10,14 +10,12 @@ from .internal_links import fix_docx_internal_links
 from .link_injector import fix_docx_hyperlinks
 from .list_detector import fix_lists_in_docx
 from .log import logger
-from .tables import fix_docx_tables
 
 
 @dataclass
 class PostProcessReport:
     """Counts of fixes applied and the names of passes that failed."""
 
-    tables_flattened: int = 0
     headings_fixed: int = 0
     lists_fixed: int = 0
     hyperlinks_added: int = 0
@@ -40,7 +38,6 @@ def _run_pass(report: PostProcessReport, name: str, docx_path: PathLike,
 def post_process_docx(
     docx_path: PathLike,
     pdf_path: Optional[PathLike] = None,
-    fix_tables: bool = True,
     fix_headings: bool = True,
     fix_lists: bool = True,
     fix_hyperlinks: bool = True,
@@ -51,7 +48,7 @@ def post_process_docx(
 ) -> PostProcessReport:
     """Run all post-processing passes on a generated DOCX, modifying it in place.
 
-    Passes that read the source PDF (tables, headings, internal links) run only when
+    Passes that read the source PDF (headings, internal links) run only when
     ``pdf_path`` is given. Headings run before lists so numbered headings are never
     restyled as list items. Each pass opens and saves the file on its own, so a failing
     pass leaves the file as the previous pass left it. Failures are logged as warnings
@@ -61,11 +58,6 @@ def post_process_docx(
     source: PathLike = pdf_path if pdf_path is not None else ""
     has_pdf = pdf_path is not None
 
-    if fix_tables and has_pdf:
-        report.tables_flattened = _run_pass(
-            report, "tables", docx_path,
-            lambda: fix_docx_tables(docx_path, source, verbose=verbose),
-        )
     if fix_headings and has_pdf:
         report.headings_fixed = _run_pass(
             report, "headings", docx_path,

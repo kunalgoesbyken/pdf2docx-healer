@@ -40,8 +40,6 @@ def build_parser() -> argparse.ArgumentParser:
                         help="Skip heading styles from the PDF outline and font sizes")
     parser.add_argument("--no-internal-links", action="store_true",
                         help="Skip internal links (citations, cross references)")
-    parser.add_argument("--no-table-fix", action="store_true",
-                        help="Keep layout tables that pdf2docx creates where the PDF has none")
     parser.add_argument("--no-page-recovery", action="store_true",
                         help="Do not rebuild pages that pdf2docx fails to convert")
     parser.add_argument("--mode", choices=("fidelity", "editable"), default="fidelity",
@@ -69,7 +67,6 @@ def main(argv: Optional[List[str]] = None) -> int:
             fix_fonts=not args.no_font_fix,
             fix_headings=not args.no_headings,
             fix_internal_links=not args.no_internal_links,
-            fix_tables=not args.no_table_fix,
             recover_pages=not args.no_page_recovery,
             mode=args.mode,
             aggressive_lists=args.aggressive,

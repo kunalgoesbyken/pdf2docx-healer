@@ -35,7 +35,6 @@ class HealerConfig:
     fix_fonts: bool = True
     fix_headings: bool = True
     fix_internal_links: bool = True
-    fix_tables: bool = True
     recover_pages: bool = True
 
     mode: str = "fidelity"
@@ -84,7 +83,6 @@ def heal(
         post_process_docx(
             staged,
             pdf_path=source,
-            fix_tables=config.fix_tables and not editable,
             fix_headings=config.fix_headings and not editable,
             fix_lists=config.fix_lists and not editable,
             fix_hyperlinks=config.fix_hyperlinks,

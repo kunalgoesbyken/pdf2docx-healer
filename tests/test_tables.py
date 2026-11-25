@@ -1,7 +1,5 @@
-import pytest
 from docx import Document
 from docx.oxml.ns import qn
-from docx.shared import Pt
 
 from convert_support import (
     body_text,
@@ -10,51 +8,6 @@ from convert_support import (
     table_count,
 )
 from docx_healer import HealerConfig, heal
-from docx_healer.tables import fix_docx_tables
-from factories import make_docx, make_pdf
-
-
-def borderless_single_cell(doc):
-    table = doc.add_table(rows=1, cols=1)
-    table.cell(0, 0).text = "Text held by a single cell table"
-
-
-def nested_tables(doc):
-    outer = doc.add_table(rows=1, cols=1)
-    cell = outer.cell(0, 0)
-    inner = cell.add_table(rows=2, cols=2)
-    for index, value in enumerate(["A", "B", "C", "D"]):
-        inner.cell(index // 2, index % 2).text = value
-    cell.add_paragraph("after")
-
-
-def exact_height_row(doc):
-    table = doc.add_table(rows=1, cols=1)
-    table.cell(0, 0).text = "Fixed height row"
-    row = table.rows[0]
-    row.height = Pt(36)
-
-
-def two_by_three(doc):
-    table = doc.add_table(rows=2, cols=3)
-    for index, value in enumerate(["Region", "Revenue", "Growth", "North", "120", "4%"]):
-        table.cell(index // 3, index % 3).text = value
-
-
-@pytest.mark.parametrize(
-    "build",
-    [borderless_single_cell, nested_tables, exact_height_row, two_by_three],
-    ids=lambda build: build.__name__,
-)
-def test_table_pass_leaves_every_table_shape_untouched(tmp_path, build):
-    path = make_docx(tmp_path / "in.docx", build)
-    pdf = make_pdf(tmp_path / "in.pdf", ["page"])
-    before = path.read_bytes()
-
-    changed = fix_docx_tables(path, pdf)
-
-    assert changed == 0
-    assert path.read_bytes() == before
 
 
 def test_ruled_table_survives_the_full_pipeline(tmp_path):
