@@ -67,6 +67,21 @@ def test_image_pixel_cap_skips_only_images_over_the_limit(tmp_path, caplog, limi
     assert bool(_warnings(caplog, "max_image_pixels")) is (kept == 0)
 
 
+def test_page_with_one_oversized_image_keeps_its_text_and_other_images(tmp_path, caplog):
+    def build(doc):
+        page = new_page(doc)
+        put(page, LEFT, 60, "Two pictures follow this sentence on the page.")
+        page.insert_image(pymupdf.Rect(72, 100, 272, 200), stream=png_bytes(100, 50))
+        page.insert_image(pymupdf.Rect(72, 300, 272, 400), stream=png_bytes(110, 55))
+
+    with caplog.at_level(logging.WARNING, logger="docx_healer"):
+        out = convert(tmp_path, build, limits=FlowLimits(max_image_pixels=5000))
+
+    assert len(Document(str(out)).inline_shapes) == 1
+    assert "Two pictures follow" in " ".join(texts(out))
+    assert len(_warnings(caplog, "max_image_pixels")) == 1
+
+
 @pytest.mark.parametrize("limit,found", [(6, False), (7, True)])
 def test_drawing_segment_cap_leaves_tables_as_text(tmp_path, caplog, limit, found):
     def build(doc):

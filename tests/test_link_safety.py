@@ -177,6 +177,21 @@ def test_heal_never_writes_unsafe_link_targets(tmp_path, mode, uri):
 
 
 @pytest.mark.parametrize("mode", ["fidelity", "editable"])
+def test_heal_writes_nothing_when_the_link_check_fails(tmp_path, monkeypatch, mode):
+    def broken(*args, **kwargs):
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr("docx_healer.post_processor.unlink_unsafe_targets", broken)
+    pdf = _pdf_with_link(tmp_path / "in.pdf", "javascript:alert(1)")
+
+    with pytest.raises(RuntimeError):
+        heal(pdf, tmp_path / "out.docx", HealerConfig(verbose=False, mode=mode))
+
+    assert not (tmp_path / "out.docx").exists()
+    assert not list(tmp_path.glob("*.docx*"))
+
+
+@pytest.mark.parametrize("mode", ["fidelity", "editable"])
 def test_heal_keeps_unsafe_link_removal_with_hyperlink_pass_off(tmp_path, mode):
     pdf = _pdf_with_link(tmp_path / "in.pdf", "ms-msdt:/id PCWDiagnostic")
 

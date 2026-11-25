@@ -85,8 +85,5 @@ def post_process_docx(
             report, "fonts", docx_path,
             lambda: fix_docx_fonts(docx_path, verbose=verbose),
         )
-    report.unsafe_links_removed = _run_pass(
-        report, "link safety", docx_path,
-        lambda: unlink_unsafe_targets(docx_path, verbose=verbose),
-    )
+    report.unsafe_links_removed = unlink_unsafe_targets(docx_path, verbose=verbose)
     return report

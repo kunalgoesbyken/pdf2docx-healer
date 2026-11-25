@@ -55,7 +55,7 @@ def extract_page(page: Any, budget: Budget) -> PageData:
     rect = page.rect * page.derotation_matrix
     data = PageData(number=page.number, width=rect.width, height=rect.height)
     links = _page_links(page, budget)
-    blocks = page.get_text("rawdict")["blocks"]
+    blocks = _page_blocks(page, budget)
     dominant = _dominant_direction(blocks)
     unit_index = 0
     for block in blocks:
@@ -79,6 +79,35 @@ def extract_page(page: Any, budget: Budget) -> PageData:
     _add_tables(page, data, budget)
     _add_figures(page, data, budget)
     return data
+
+
+def _page_blocks(page: Any, budget: Budget) -> List[Dict[str, Any]]:
+    """Read the page's blocks without ever decoding an image over max_image_pixels."""
+    cap = budget.limits.max_image_pixels
+    infos = page.get_image_info(xrefs=True)
+    if all(info["width"] * info["height"] <= cap for info in infos):
+        return list(page.get_text("rawdict")["blocks"])
+    flags = pymupdf.TEXTFLAGS_RAWDICT & ~pymupdf.TEXT_PRESERVE_IMAGES
+    blocks = list(page.get_text("rawdict", flags=flags)["blocks"])
+    for info in infos:
+        if info["width"] * info["height"] > cap:
+            _warn_once(
+                budget, f"pixels{page.number}",
+                f"Skipped an image on page {page.number + 1} larger than max_image_pixels={cap}",
+            )
+            continue
+        if not info["xref"]:
+            continue
+        try:
+            extracted = page.parent.extract_image(info["xref"])
+        except Exception as exc:
+            logger.debug("Could not read image xref %d: %s", info["xref"], exc)
+            continue
+        blocks.append({
+            "type": 1, "bbox": info["bbox"], "width": info["width"],
+            "height": info["height"], "image": extracted["image"], "ext": extracted["ext"],
+        })
+    return blocks
 
 
 def _direction(raw: Dict[str, Any]) -> Tuple[int, int]:
@@ -278,14 +307,6 @@ def _add_image(data: PageData, block: Dict[str, Any], budget: Budget) -> None:
         return
     if (width < _MIN_IMAGE_SIDE and height < _MIN_IMAGE_SIDE) or width * height < _MIN_IMAGE_AREA:
         logger.debug("Skipped decorative image on page %d", data.number + 1)
-        return
-    pixels = int(block.get("width", 0)) * int(block.get("height", 0))
-    if pixels > budget.limits.max_image_pixels:
-        _warn_once(
-            budget, f"pixels{data.number}",
-            f"Skipped an image on page {data.number + 1} larger than "
-            f"max_image_pixels={budget.limits.max_image_pixels}",
-        )
         return
     if budget.images_left <= 0 or budget.bytes_left < len(image):
         _warn_once(
