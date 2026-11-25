@@ -3,7 +3,7 @@ import importlib
 import pytest
 from docx import Document
 
-from docx_healer import HealerConfig, IncompatiblePdf2docxError, heal
+from docx_healer import HealerConfig, IncompatiblePdf2docxError, heal, patches
 from docx_healer.patches import _is_list_item, list_item_patches
 from factories import TEXT_PAGE, make_list_with_prices_pdf, make_pdf
 
@@ -12,21 +12,44 @@ BLOCKS = "pdf2docx.layout.Blocks"
 
 @pytest.mark.parametrize(
     "text",
-    ["• item", "- item", "* item", "-", "1. item", "1.", "12) item", "a. item",
-     "(iv) item", "1.2. item", " item", "– item"],
+    ["• item", "•", "· ", "- item", "* item", "1. item", "12) item", "a. item", "(iv) item",
+     "■ item", " item", " item", "– item"],
 )
 def test_list_markers_are_detected(text):
     assert _is_list_item(text)
 
 
-@pytest.mark.parametrize("text", ["", "   ", "Hello world", "-5 degrees", "*note", "1.5 million", "2024"])
+@pytest.mark.parametrize(
+    "text",
+    ["", "   ", "Hello world", "-5 degrees", "*note", "1.5 million", "2024", "-", "1.", "(a)",
+     "LLC. Enter the name", "1.2. item", "iiii. text", "Fig. 3. Results", "e.g. a thing", "U.S. army"],
+)
 def test_non_list_text_is_not_detected(text):
     assert not _is_list_item(text)
 
 
-def test_private_use_bullet_is_normalised():
-    assert _is_list_item(" item") == "•"
+@pytest.mark.parametrize(
+    "value",
+    [[["1. a", "b"], ["2. c", "d"]], [], None, 5, b"item", object(), 1.5, ("•",)],
+)
+def test_non_string_input_never_raises(value):
+    assert not _is_list_item(value)
 
+
+def test_private_use_bullet_is_returned_as_written():
+    assert _is_list_item(" item") == ""
+
+
+def test_a_failing_marker_parser_never_costs_a_page(monkeypatch):
+    blocks = importlib.import_module(BLOCKS)
+
+    def broken(*args, **kwargs):
+        raise RuntimeError("parser blew up")
+
+    monkeypatch.setattr(patches, "parse_marker", broken, raising=False)
+
+    with list_item_patches():
+        assert blocks.is_list_item("• item") is None
 
 def test_patches_apply_inside_the_context_and_are_restored():
     blocks = importlib.import_module(BLOCKS)

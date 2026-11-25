@@ -3,40 +3,31 @@
 import functools
 import importlib
 import inspect
-import re
 import threading
 from contextlib import contextmanager
 from importlib import metadata
 from typing import Any, Callable, Iterator, Optional
 
-from .constants import BULLET_CODEPOINTS
 from .errors import IncompatiblePdf2docxError
+from .list_markers import parse_marker
+from .log import logger
 
-_MARKER_CHARS = frozenset("-*+~>»")
-_BULLET_MAP = {0xF0B7: "•"}
-_NUMBERED_PREFIX = re.compile(
-    r"^(?:\d{1,3}\.\d{1,3}[.)]|\d{1,3}[.)]|[a-z][.)]|[ivxlcdm]+[.)]"
-    r"|\((?:\d{1,3}|[a-z]|[ivxlcdm]+)\))(?:\s|$)",
-    re.IGNORECASE,
-)
 _BLOCKS_MODULE = "pdf2docx.layout.Blocks"
 _PATCH_LOCK = threading.RLock()
 
 
-def _is_list_item(text: str, bullets: bool = True, numbers: bool = True) -> Optional[str]:
-    """Return the marker when ``text`` starts with a bullet or number prefix, else None."""
-    stripped = text.strip() if text else ""
-    if not stripped:
+def _is_list_item(text: Any, bullets: bool = True, numbers: bool = True) -> Optional[str]:
+    """Return the marker when a row starts with a list marker, else None; never raises."""
+    if not isinstance(text, str):
         return None
-
-    first = stripped[0]
-    if bullets and ord(first) in BULLET_CODEPOINTS:
-        return _BULLET_MAP.get(ord(first), first)
-    if bullets and first in _MARKER_CHARS and (len(stripped) == 1 or stripped[1].isspace()):
-        return first
-    if numbers and _NUMBERED_PREFIX.match(stripped):
-        return stripped
-    return None
+    try:
+        marker = parse_marker(text, bare=True)
+    except Exception:
+        logger.debug("List marker parsing failed and was ignored", exc_info=True)
+        return None
+    if marker is None or not (bullets if marker.is_bullet else numbers):
+        return None
+    return text[: marker.end].strip()
 
 
 def _pdf2docx_version() -> str:
