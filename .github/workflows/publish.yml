@@ -12,20 +12,20 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - name: Install build tool
-        run: pip install --upgrade build
+      - uses: astral-sh/setup-uv@v6
 
       - name: Build sdist and wheel
-        run: python -m build
+        run: uv build
 
-      - name: Verify with twine check
+      - name: Check metadata
+        run: uvx twine check dist/*
+
+      - name: Smoke test the wheel with uv and pip
         run: |
-          pip install --upgrade twine
-          twine check dist/*
+          uvx --from "$(ls dist/*.whl)" pdf2docx-heal --version
+          uv venv /tmp/pipcheck
+          uv pip install --python /tmp/pipcheck dist/*.whl
+          /tmp/pipcheck/bin/python -c "import docx_healer; print(docx_healer.__version__)"
 
       - name: Upload distribution artifacts
         uses: actions/upload-artifact@v4
@@ -47,5 +47,25 @@ jobs:
           name: dist
           path: dist/
 
+      - uses: astral-sh/setup-uv@v6
+
       - name: Publish to PyPI
-        uses: pypa/gh-action-pypi-publish@release/v1
+        run: uv publish --trusted-publishing always
+
+  release:
+    name: GitHub release
+    needs: publish
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download distribution artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      - name: Create release with the built files
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" dist/* --repo "$GITHUB_REPOSITORY" --generate-notes
