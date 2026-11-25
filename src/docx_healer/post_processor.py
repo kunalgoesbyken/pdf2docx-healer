@@ -58,17 +58,18 @@ def post_process_docx(
     and listed in the returned report instead of aborting the remaining passes.
     """
     report = PostProcessReport()
+    source: PathLike = pdf_path if pdf_path is not None else ""
     has_pdf = pdf_path is not None
 
     if fix_tables and has_pdf:
         report.tables_flattened = _run_pass(
             report, "tables", docx_path,
-            lambda: fix_docx_tables(docx_path, pdf_path, verbose=verbose),
+            lambda: fix_docx_tables(docx_path, source, verbose=verbose),
         )
     if fix_headings and has_pdf:
         report.headings_fixed = _run_pass(
             report, "headings", docx_path,
-            lambda: fix_docx_headings(docx_path, pdf_path, verbose=verbose),
+            lambda: fix_docx_headings(docx_path, source, verbose=verbose),
         )
     if fix_lists:
         report.lists_fixed = _run_pass(
@@ -83,7 +84,7 @@ def post_process_docx(
     if fix_internal_links and has_pdf:
         report.internal_links_added = _run_pass(
             report, "internal links", docx_path,
-            lambda: fix_docx_internal_links(docx_path, pdf_path, verbose=verbose),
+            lambda: fix_docx_internal_links(docx_path, source, verbose=verbose),
         )
     if fix_fonts:
         report.fonts_fixed = _run_pass(
