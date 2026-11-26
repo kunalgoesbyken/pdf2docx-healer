@@ -1,53 +1,46 @@
-<p align="center">
-  <img src="https://raw.githubusercontent.com/kunalgoesbyken/pdf2docx-healer/main/docs/assets/logo.svg" alt="pdf2docx-healer" width="440">
-</p>
+<div align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/kunalgoesbyken/pdf2docx-healer/main/docs/assets/icon-dark.svg">
+    <img src="https://raw.githubusercontent.com/kunalgoesbyken/pdf2docx-healer/main/docs/assets/icon-light.svg" alt="pdf2docx-healer" width="96" height="96">
+  </picture>
+  <h1>pdf2docx-healer</h1>
+  <p>Convert PDF to Word and get a document you can edit: real headings, real lists, working links, tables, and right-to-left text in the right order. A Python library and a command line tool.</p>
+  <p>
+    <a href="https://pypi.org/project/pdf2docx-healer/"><img src="https://img.shields.io/pypi/v/pdf2docx-healer.svg" alt="PyPI version"></a>
+    <a href="https://pypi.org/project/pdf2docx-healer/"><img src="https://img.shields.io/pypi/pyversions/pdf2docx-healer.svg" alt="Python versions"></a>
+    <a href="https://github.com/kunalgoesbyken/pdf2docx-healer/actions/workflows/ci.yml"><img src="https://github.com/kunalgoesbyken/pdf2docx-healer/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+    <a href="https://github.com/kunalgoesbyken/pdf2docx-healer/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="MIT licence"></a>
+  </p>
+  <p>
+    <a href="#install"><strong>Install</strong></a> ·
+    <a href="#benchmark">Benchmark</a> ·
+    <a href="https://github.com/kunalgoesbyken/pdf2docx-healer/blob/main/CHANGELOG.md">Changelog</a> ·
+    <a href="https://github.com/kunalgoesbyken/pdf2docx-healer/issues/new">Send a PDF that converts badly</a>
+  </p>
+  <p>Runs on your computer. Your PDFs are never uploaded anywhere.</p>
+</div>
 
-<p align="center">
-  <b>Turn a PDF into a Word document you can actually edit.</b><br>
-  Real headings, real lists, working links, tables, and right-to-left text in the right order.<br>
-  Runs on your computer, so your files never leave it.
-</p>
+![pdf2docx-healer: the first page of the two-column LLaMA paper next to the Word document it becomes in editable mode](https://raw.githubusercontent.com/kunalgoesbyken/pdf2docx-healer/main/docs/assets/readme-card.webp)
 
-<p align="center">
-  <a href="https://pypi.org/project/pdf2docx-healer/"><img src="https://img.shields.io/pypi/v/pdf2docx-healer.svg?logo=pypi&logoColor=white" alt="PyPI version"></a>
-  <a href="https://pypi.org/project/pdf2docx-healer/"><img src="https://img.shields.io/pypi/pyversions/pdf2docx-healer.svg?logo=python&logoColor=white" alt="Python versions"></a>
-  <a href="https://github.com/kunalgoesbyken/pdf2docx-healer/actions"><img src="https://img.shields.io/github/actions/workflow/status/kunalgoesbyken/pdf2docx-healer/ci.yml?branch=main&logo=github&label=CI" alt="CI"></a>
-  <a href="https://github.com/kunalgoesbyken/pdf2docx-healer/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License: MIT"></a>
-</p>
+Most PDF to Word converters copy how each page looks. The result looks right until you try to edit it: titles are just big bold text, bullets are typed characters, two-column papers come out in the wrong order, and Hebrew or Arabic text comes out in the wrong order. pdf2docx-healer rebuilds what the document means instead. Titles become Word headings, numbered items become Word lists, "see Section 2" becomes a link you can click, and a two-column paper reads top to bottom.
+
+It has the same one-line call as `pdf2docx`: `heal("in.pdf", "out.docx")`. To try it without installing anything:
 
 ```bash
-uvx --from pdf2docx-healer pdf2docx-heal report.pdf --mode editable
+uvx --from pdf2docx-healer pdf2docx-heal paper.pdf --mode editable
 ```
 
-<p align="center">
-  <img src="https://raw.githubusercontent.com/kunalgoesbyken/pdf2docx-healer/main/docs/assets/benchmark.svg" alt="Benchmark: pdf2docx-healer keeps more words in reading order and is the only tool that finds headings, against pdf2docx, pdf2docx-plus and LibreOffice" width="880">
-</p>
+## Why not pdf2docx or LibreOffice?
 
----
+Both are good at keeping the look of a page. pdf2docx-healer is for when you need to edit the result.
 
-## Why
+- **Headings you can navigate.** Titles get real heading styles, from the PDF's bookmarks or from font sizes, so Word's navigation pane and table of contents work. In the benchmark, pdf2docx, pdf2docx-plus and LibreOffice found no headings at all.
+- **Lists that stay lists.** Bullets, `1.`, `a)`, `iii.` and outlines like `1.2.3` become Word lists that renumber when you edit them.
+- **Links inside the document.** Citations, footnote marks and cross references become links to the right place.
+- **Reading order.** Editable mode reads two-column pages one column at a time and keeps right-to-left paragraphs in order. On the two-column LLaMA paper it keeps 0.986 of the words in order, against 0.78 for the best of the others. On a Hebrew article it keeps 0.964, against 0.60.
+- **No lost pages.** LibreOffice dropped all 36 pages of a Hindi syllabus in the benchmark. When pdf2docx fails on a page, healer rebuilds it from the page's text and images instead of dropping it.
 
-Most PDF to Word converters copy how the page looks. You get headings that are only big bold text, bullets typed as characters, two-column papers read across the columns, and Hebrew or Arabic words in the wrong order. Editing that file is slow and painful.
-
-pdf2docx-healer rebuilds the structure instead. It is a drop-in upgrade for `pdf2docx`, with the same one-line call.
-
-| | pdf2docx | pdf2docx-plus | LibreOffice | **pdf2docx-healer** |
-| --- | :---: | :---: | :---: | :---: |
-| Word heading styles (navigation pane, table of contents) | no | no | no | **yes** |
-| Real Word lists | no | some | no | **yes** |
-| Internal links (citations, "see section 2") | no | no | no | **yes** |
-| Words kept in reading order | 0.85 | 0.86 | 0.70 | **0.94** editable, 0.88 default |
-| Pages lost out of 230 | 0 | 0 | 36 | **0** |
-
-The numbers come from a public benchmark of 12 real PDFs plus one generated test PDF. [Full results and where rivals still win](#benchmark).
-
-Good for:
-- **Papers and reports** you need to edit, cite or reuse.
-- **Translation work**, where a CAT tool needs a clean DOCX.
-- **Hebrew, Arabic, Chinese, Hindi** and other non-Latin documents.
-- **Pipelines** that need document structure, not just text.
-
----
+The others still do better in a few places, listed under the [benchmark](#benchmark). If you need a pixel-perfect copy of a form, keep the default mode, which keeps the page layout.
 
 ## Install
 
@@ -67,8 +60,6 @@ pipx install pdf2docx-healer
 ```
 
 Python 3.10 to 3.13 on Windows, macOS and Linux.
-
----
 
 ## Quick start
 
@@ -95,13 +86,13 @@ heal("report.pdf", "report.docx", config=HealerConfig(mode="editable"))
 
 Both modes add Word heading styles (from the PDF outline, or font sizes when there is none), real Word lists, clickable web and mail links, internal links for citations and cross references, and font fallbacks for CJK, Arabic, Hebrew, Thai and Devanagari.
 
-Editable mode also reads two-column pages in the right order and keeps right-to-left paragraphs in order. Repeating headers, footers, logos and page numbers move into the Word header and footer. Lists come through with their real format: bullets, `1.`, `a)`, `iii.`, and outlines like `1.2.3`.
-
----
+In editable mode, repeating headers, footers, logos and page numbers move into the Word header and footer. Lists come through with their real format: bullets, `1.`, `a)`, `iii.`, and outlines like `1.2.3`.
 
 ## Benchmark
 
-Run on 2026-11-26 with healer 0.3.0, pdf2docx 0.5.13, pdf2docx-plus 0.6.10 and LibreOffice (headless, `writer_pdf_import`). Every number is computed from the PDF itself and the produced DOCX; nothing is read from logs. The full table, per-document rows, the corpus and the exact definitions are in [`bench/README.md`](https://github.com/kunalgoesbyken/pdf2docx-healer/blob/main/bench/README.md), and `python -m bench.run` reproduces it.
+![Benchmark chart: words kept in reading order, headings, real Word lists and tables for pdf2docx-healer, pdf2docx, pdf2docx-plus and LibreOffice](https://raw.githubusercontent.com/kunalgoesbyken/pdf2docx-healer/main/docs/assets/benchmark.svg)
+
+Run on 2026-11-26 with healer 0.3.0, pdf2docx 0.5.13, pdf2docx-plus 0.6.10 and LibreOffice (headless, `writer_pdf_import`), on 12 public PDFs plus one generated test PDF, 230 pages in all. Every number is computed from the PDF and the produced DOCX; nothing is read from logs. `python -m bench.run` reproduces it, and [`bench/README.md`](https://github.com/kunalgoesbyken/pdf2docx-healer/blob/main/bench/README.md) has the corpus, the per-document rows and the exact definitions.
 
 | Tool | Word recall | Recall any order | Headings | Real lists | Number shown | Internal links | Tables | Images | Pages lost | Median s |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -111,18 +102,7 @@ Run on 2026-11-26 with healer 0.3.0, pdf2docx 0.5.13, pdf2docx-plus 0.6.10 and L
 | pdf2docx | 0.848 | 0.958 | 0.00 | 0.00 | **1.00** | 0.00 | 0.33 | 0.66 | **0/230** | 6.7 |
 | LibreOffice | 0.698 | 0.929 | 0.00 | 0.00 | 0.00 | 0.00 | 0.23 | **0.93** | 36/230 | 11.0 |
 
-Some highlights from the per-document rows:
-- **Two-column paper (LLaMA):** editable keeps 0.986 of the words in reading order, against 0.78 for the best rival.
-- **Hebrew:** editable keeps 0.964, against 0.60 for every other tool.
-- **Arabic:** editable keeps 0.768, against 0.48.
-- **Hindi syllabus:** LibreOffice drops all 36 pages; healer drops none.
-
-Where a rival still wins:
-- **Images:** LibreOffice scores highest because the score counts only raster images. On the two-column paper, healer turns the vector charts into pictures (counted as extra) and LibreOffice leaves them out (counted as correct).
-- **Tables in fidelity mode:** pdf2docx-plus scores 0.64 against healer's 0.50. Editable mode scores 0.88.
-- **Single documents:** editable is a little behind on the Chinese text (0.958 against 0.993 for pdf2docx-plus) and on the Mixtral paper (0.928 against 0.951). Fidelity mode scores 1.000 on the Chinese text and 0.950 on Mixtral.
-
----
+Where the others still win: LibreOffice has the best image score, because the score counts raster images only, so it gets credit for leaving out the vector charts that healer turns into pictures. pdf2docx-plus scores better on tables than healer's default mode (0.64 against 0.50; editable mode scores 0.88). In editable mode healer is a little behind pdf2docx-plus on the Chinese text (0.958 against 0.993) and on the Mixtral paper (0.928 against 0.951); the default mode scores 1.000 and 0.950 on those two.
 
 ## Options
 
@@ -152,21 +132,15 @@ The output is written only when the whole conversion has finished, so a failure 
 - **Large PDFs:** editable mode caps images, image size and pixels, drawings and table time, so a hostile PDF cannot exhaust memory.
 - **OCR:** runs through PyMuPDF and needs [Tesseract](https://github.com/tesseract-ocr/tesseract) on `PATH` or `TESSDATA_PREFIX`. Without it, scanned pages are kept as images and a warning is logged.
 
----
-
 ## Requirements
 
 - Python 3.10+
 - `pdf2docx >= 0.5.9, < 0.6`, `PyMuPDF >= 1.27.1`, `python-docx >= 1.1.0`, `lxml >= 4.9`
 - [Tesseract](https://github.com/tesseract-ocr/tesseract), optional, for OCR
 
----
-
 ## Found a PDF that converts badly?
 
 [Open an issue](https://github.com/kunalgoesbyken/pdf2docx-healer/issues/new) and attach the PDF, or a link to it, with what went wrong. Bad conversions are the fastest way to make this better.
-
----
 
 ## Development
 
