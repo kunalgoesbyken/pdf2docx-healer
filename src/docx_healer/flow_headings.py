@@ -18,6 +18,7 @@ _PREFIX = re.compile(r"^[0-9A-Za-z.]{1,8}\s+")
 _OUTLINE_SHARE = 0.5
 _MAX_PREFIX = 8
 _TITLE_RATIO = 1.05
+_TIGHT_GAP = 0.5
 
 OutlineEntry = Tuple[int, str, int, Optional[float]]
 
@@ -63,7 +64,7 @@ def outline_headings(paras_by_page: Dict[int, List[Para]], toc: List[OutlineEntr
 
 def statistic_headings(paras: List[Para], body: float) -> int:
     """Mark short paragraphs set larger than the body text as headings by size rank."""
-    candidates = [p for p in paras if _is_candidate(p, body)]
+    candidates = _candidates(paras, body)
     if not candidates or len(candidates) > _MAX_SHARE * max(1, len(paras)):
         return 0
     sizes: List[float] = []
@@ -86,6 +87,38 @@ def _is_candidate(para: Para, body: float) -> bool:
         return False
     ratio = para.size / body if body else 1.0
     return ratio >= _SIZE_RATIO or (para.bold and ratio >= _BOLD_RATIO)
+
+
+def _tight(first: Para, second: Para) -> bool:
+    if not first.boxes or not second.boxes or abs(first.size - second.size) > _SIZE_MERGE:
+        return False
+    (seg_a, above, _), (seg_b, below, _) = first.boxes[-1], second.boxes[0]
+    if seg_a[0] != seg_b[0] or min(above[2], below[2]) <= max(above[0], below[0]):
+        return False
+    return abs(below[1] - above[3]) <= _TIGHT_GAP * max(first.size, second.size)
+
+
+def _candidates(paras: List[Para], body: float) -> List[Para]:
+    """Return heading candidates, leaving out lines that are part of a tight block of text.
+
+    A block is a run of paragraphs set in the same size with less than half a line between
+    them, like a list of author names. It holds headings only when every paragraph in it
+    looks like one and all of it together is no longer than one heading can be.
+    """
+    chosen: List[Para] = []
+    group: List[Para] = []
+    for index, para in enumerate(paras):
+        group.append(para)
+        following = paras[index + 1] if index + 1 < len(paras) else None
+        if following is not None and _tight(para, following):
+            continue
+        looks = [p for p in group if _is_candidate(p, body)]
+        lines = sum(p.lines for p in group)
+        chars = sum(len(p.text) for p in group)
+        if len(looks) == len(group) and lines <= _MAX_LINES and chars <= _MAX_STAT_CHARS:
+            chosen.extend(looks)
+        group = []
+    return chosen
 
 
 def assign_headings(paras: List[Para], toc: List[OutlineEntry], body: float) -> Tuple[str, int]:
@@ -115,8 +148,8 @@ def _extend_outline(paras: List[Para], body: float) -> int:
         return 0
     largest = max(size for size, _ in levels)
     added = 0
-    for para in paras:
-        if not _is_candidate(para, body):
+    for para in _candidates(paras, body):
+        if para.kind != "para":
             continue
         level = levels.get((round(para.size * 2) / 2, para.bold))
         if level is not None:

@@ -54,6 +54,8 @@ class Span:
     sub: bool = False
     font: str = ""
     link: Optional[LinkKey] = None
+    color: int = 0
+    serif: bool = False
 
     def clone(self) -> "Span":
         return replace(self)
@@ -62,6 +64,7 @@ class Span:
         return (
             self.bold == other.bold and self.italic == other.italic and self.mono == other.mono
             and self.sup == other.sup and self.sub == other.sub and self.link == other.link
+            and self.color == other.color and self.font == other.font
             and abs(self.size - other.size) < 0.6
         )
 
@@ -78,6 +81,8 @@ class Line:
     bold: bool
     head_x: List[float] = field(default_factory=list)
     edge: float = 0.0
+    base: float = 0.0
+    shade: Optional[int] = None
 
     @property
     def text(self) -> str:
@@ -90,6 +95,7 @@ class Unit:
 
     lines: List[Line]
     rotated: bool = False
+    turn: str = ""
 
     @property
     def bbox(self) -> Rect:
@@ -105,6 +111,7 @@ class ImageItem:
     ext: str
     key: Tuple[Any, ...]
     page: int = 0
+    seg: Tuple[Any, ...] = ()
 
     @property
     def width(self) -> float:
@@ -138,6 +145,7 @@ class TableItem:
     height: float = 0.0
     row_edges: List[float] = field(default_factory=list)
     grid: Dict[Tuple[int, int], Cell] = field(default_factory=dict)
+    seg: Tuple[Any, ...] = ()
 
 
 @dataclass
@@ -151,6 +159,8 @@ class PageData:
     tables: List[TableItem] = field(default_factory=list)
     images: List[ImageItem] = field(default_factory=list)
     figures: int = 0
+    gutters: List[Tuple[float, float]] = field(default_factory=list)
+    rtl: bool = False
 
     @property
     def has_text(self) -> bool:
@@ -191,6 +201,9 @@ class Para:
     num: Optional[Tuple[int, int]] = None
     bookmark: Optional[str] = None
     last_line_text: str = ""
+    hyphens: int = 0
+    shade: Optional[int] = None
+    boxes: List[Tuple[Tuple[Any, ...], Rect, float]] = field(default_factory=list)
 
     @property
     def text(self) -> str:
@@ -217,6 +230,10 @@ class RunningLine:
     align: str
     rtl: bool
     first_page: bool
+    font: str = ""
+    color: int = 0
+    italic: bool = False
+    box: Rect = (0.0, 0.0, 0.0, 0.0)
 
 
 @dataclass

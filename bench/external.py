@@ -81,8 +81,8 @@ def convert_plus(pdf: str, out: str) -> Optional[str]:
     return f"logged page failures: {failures}" if failures else None
 
 
-def convert_libreoffice(pdf: str, out: str) -> None:
-    """LibreOffice headless with the Writer PDF import filter and its own user profile.
+def soffice_convert(source: str, out: str, target: str, infilter: Optional[str] = None) -> None:
+    """Convert one file with LibreOffice headless into ``target`` format, using its own profile.
 
     The profile is BENCH_SOFFICE_PROFILE when set, otherwise a throwaway folder, so a stale
     lock from an earlier run can never block a conversion.
@@ -94,19 +94,40 @@ def convert_libreoffice(pdf: str, out: str) -> None:
         outdir = Path(work) / "out"
         outdir.mkdir()
         profile = Path(os.environ.get(PROFILE_ENV) or Path(work) / "profile")
-        argv = [
-            soffice,
-            f"-env:UserInstallation={profile.resolve().as_uri()}",
-            "--headless",
-            "--infilter=writer_pdf_import",
-            "--convert-to",
-            "docx",
-            "--outdir",
-            str(outdir),
-            pdf,
-        ]
+        argv = [soffice, f"-env:UserInstallation={profile.resolve().as_uri()}", "--headless"]
+        if infilter:
+            argv.append(f"--infilter={infilter}")
+        argv += ["--convert-to", target, "--outdir", str(outdir), source]
         process = run_command(argv)
-        produced = outdir / (Path(pdf).stem + ".docx")
+        produced = outdir / (Path(source).stem + "." + target)
         if not produced.exists():
             raise RuntimeError(f"exit code {process.returncode}: {error_tail(process.stderr)}")
         shutil.move(str(produced), out)
+
+
+def convert_libreoffice(pdf: str, out: str) -> None:
+    """LibreOffice headless with the Writer PDF import filter."""
+    soffice_convert(pdf, out, "docx", "writer_pdf_import")
+
+
+def render_pdf(docx: str, out: str) -> None:
+    """Lay out a DOCX with LibreOffice Writer and save the pages as a PDF."""
+    soffice_convert(docx, out, "pdf")
+
+
+WORD_SCRIPT = (
+    "$ErrorActionPreference='Stop';$w=New-Object -ComObject Word.Application;$w.Visible=$false;"
+    "$w.DisplayAlerts=0;try{{$d=$w.Documents.Open('{src}',$false,$true,$false);"
+    "$d.ExportAsFixedFormat('{out}',17);$d.Close(0)}}finally{{$w.Quit()}}"
+)
+
+
+def render_pdf_word(docx: str, out: str) -> None:
+    """Lay out a DOCX with Microsoft Word (Windows, through COM) and save the pages as a PDF."""
+    script = WORD_SCRIPT.format(
+        src=str(Path(docx).resolve()).replace("'", "''"),
+        out=str(Path(out).resolve()).replace("'", "''"),
+    )
+    process = run_command(["powershell", "-NoProfile", "-NonInteractive", "-Command", script])
+    if not has_output(out):
+        raise RuntimeError(f"Word export failed: {error_tail(process.stderr + process.stdout)}")

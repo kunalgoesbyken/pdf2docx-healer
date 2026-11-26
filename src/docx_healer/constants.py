@@ -51,3 +51,28 @@ CHAR_RANGE_FONT_MAP = [
     ((0x0E00, 0x0E7F), 'Leelawadee UI'),
     ((0x0900, 0x097F), 'Mangal'),
 ]
+
+FONT_FAMILY_EQUIVALENTS = (
+    (("nimbusrom", "timesnewroman", "timesroman", "times", "tinos", "liberationserif",
+      "texgyretermes", "termes", "ptmr", "nimbusroman"), "Times New Roman"),
+    (("nimbussan", "helvetica", "arial", "liberationsans", "arimo", "texgyreheros", "heros",
+      "phvr", "nimbussans"), "Arial"),
+    (("nimbusmon", "couriernew", "courier", "liberationmono", "cousine", "texgyrecursor",
+      "pcrr", "nimbusmono"), "Courier New"),
+    (("cmtt", "sftt", "lmmono", "cmuntt", "cmuntypewriter"), "Courier New"),
+    (("inconsolata", "dejavusansmono", "bitstreamverasansmono"), "Consolas"),
+    (("cmmi", "cmsy", "cmex", "msbm", "msam", "stix", "lmmath", "cambriamath"), "Cambria Math"),
+    (("cmr", "cmbx", "cmti", "cmsl", "cmss", "cmcsc", "sfrm", "sfbx", "sfti", "sfss", "lmroman",
+      "lmsans", "cmuserif", "cmu"), "Cambria"),
+    (("dejavusans", "bitstreamverasans"), "Verdana"),
+    (("dejavuserif", "bitstreamveraserif"), "Cambria"),
+    (("palatino", "pplr", "urwpalladio", "texgyrepagella", "bookantiqua"), "Palatino Linotype"),
+    (("bookman", "urwbookman", "texgyrebonum"), "Bookman Old Style"),
+    (("centuryschoolbook", "ncsr", "texgyreschola", "newcenturyschlbk"), "Century Schoolbook"),
+)
+
+FONT_CLASS_FALLBACKS = {
+    "roman": "Times New Roman",
+    "swiss": "Arial",
+    "modern": "Courier New",
+}
