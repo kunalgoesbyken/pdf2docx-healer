@@ -396,7 +396,8 @@ def _trim(spans: List[Span], leading: bool = False, trailing: bool = True) -> No
         spans[-1].text = spans[-1].text.rstrip()
 
 
-def _append_line(para: Para, line: Line, vocab: Set[str]) -> None:
+def _append_line(para: Para, line: Line, vocab: Set[str]) -> int:
+    """Add the line to the paragraph; return where its text starts in the paragraph text."""
     previous = para.last_line_text.rstrip()
     following = line.text.lstrip()
     drop, space = join_decision(previous, following, vocab)
@@ -412,10 +413,14 @@ def _append_line(para: Para, line: Line, vocab: Set[str]) -> None:
             para.spans.append(replace(last, text=" ", link=None))
         else:
             last.text += " "
+    start = len(para.text)
+    if not drop:
+        para.breaks.append(start)
     para.spans.extend(spans)
     para.lines += 1
     para.bbox = union([para.bbox, line.bbox])
     para.last_line_text = line.text
+    return start
 
 
 def finish_para(para: Para) -> None:
@@ -525,7 +530,8 @@ def join_across_segments(blocks: List[Block], vocab: Set[str]) -> List[Block]:
         last = result[-1] if result else None
         if isinstance(block, Para) and isinstance(last, Para) and _joinable(last, block):
             line = Line(block.spans, block.bbox, block.page, 0, block.size, block.bold)
-            _append_line(last, line, vocab)
+            start = _append_line(last, line, vocab)
+            last.breaks.extend(start + offset for offset in block.breaks)
             last.lines += block.lines - 1
             last.last_line_text = block.last_line_text
             last.boxes.extend(block.boxes)

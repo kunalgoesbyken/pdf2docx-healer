@@ -44,6 +44,7 @@ _MIN_GAP = 0.5
 _MAX_FONTS = 200
 _DEFAULT_FAMILY = "Times New Roman"
 _WHITE = 0xFFFFFF
+_KEEP_LINES = ("center", "right")
 _MIN_CONTRAST = 1.5
 _QUOTE = {'"': "&quot;"}
 _BIDI_SUCCESSORS = (
@@ -237,7 +238,8 @@ class Emitter:
                 _frame(p.get_or_add_pPr(), look.frame, look.turn)
             if not look.turn:
                 _apply_look(paragraph, look, indents=not listed and look.frame is None)
-        self._runs(paragraph, para)
+        kept = look is not None and look.align in _KEEP_LINES and para.marker is None
+        self._runs(paragraph, para, para.breaks if kept else [])
         if look is not None and look.column_break:
             _column_break(paragraph)
         if para.bookmark:
@@ -262,18 +264,30 @@ class Emitter:
         name = self.anchors.get(link)
         return ("anchor", name) if name else None
 
-    def _runs(self, paragraph: Paragraph, para: Para) -> None:
+    def _runs(self, paragraph: Paragraph, para: Para, breaks: List[int]) -> None:
+        """Write the spans, starting a new line at each offset in ``breaks``."""
         current: Optional[Tuple[str, str]] = None
         container: Any = None
+        position = 0
         for span in para.spans:
             target = self._target(span.link)
             if target != current:
                 current = target
                 container = self._open_link(paragraph, target) if target else None
-            run = paragraph.add_run(span.text)
-            self._format(run, span, para)
-            if container is not None:
-                container.append(run._r)
+            start, position = position, position + len(span.text)
+            cuts = [b - start for b in breaks if 0 < b and start <= b < position]
+            bounds = [0] + cuts + [len(span.text)]
+            for index, (low, high) in enumerate(zip(bounds, bounds[1:])):
+                if index:
+                    _line_break(container if container is not None else paragraph._p)
+                piece = span.text[low:high]
+                piece = piece.rstrip(" ") if index < len(cuts) else piece
+                if not piece:
+                    continue
+                run = paragraph.add_run(piece)
+                self._format(run, span, para)
+                if container is not None:
+                    container.append(run._r)
 
     def _open_link(self, paragraph: Paragraph, target: Tuple[str, str]) -> Any:
         link = OxmlElement("w:hyperlink")
@@ -456,6 +470,12 @@ def spacer(paragraph: Paragraph, look: Look) -> None:
         fmt.page_break_before = True
     if look.column_break:
         _column_break(paragraph)
+
+
+def _line_break(parent: Any) -> None:
+    run = OxmlElement("w:r")
+    run.append(OxmlElement("w:br"))
+    parent.append(run)
 
 
 def _column_break(paragraph: Paragraph) -> None:

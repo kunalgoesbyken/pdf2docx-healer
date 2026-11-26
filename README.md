@@ -22,7 +22,7 @@
 
 ![pdf2docx-healer: the first page of the two-column LLaMA paper next to the Word document it becomes in editable mode](https://raw.githubusercontent.com/kunalgoesbyken/pdf2docx-healer/main/docs/assets/readme-card.webp)
 
-Most PDF to Word converters copy how each page looks. The result looks right until you try to edit it: titles are just big bold text, bullets are typed characters, two-column papers come out in the wrong order, and Hebrew or Arabic text comes out in the wrong order. pdf2docx-healer rebuilds what the document means instead. Titles become Word headings, numbered items become Word lists, "see Section 2" becomes a link you can click, and a two-column paper reads top to bottom.
+Most PDF to Word converters copy how each page looks. The result looks right until you try to edit it: titles are just big bold text, bullets are typed characters, two-column papers come out in the wrong order, and Hebrew or Arabic text comes out in the wrong order. pdf2docx-healer rebuilds what the document means, and in editable mode it keeps how each page looks too. Titles become Word headings, numbered items become Word lists, "see Section 2" becomes a link you can click, and a two-column paper reads top to bottom.
 
 It has the same one-line call as `pdf2docx`: `heal("in.pdf", "out.docx")`. To try it without installing anything:
 
@@ -65,7 +65,7 @@ Python 3.10 to 3.13 on Windows, macOS and Linux.
 
 ```bash
 pdf2docx-heal report.pdf                      # writes report.docx, keeping the page layout
-pdf2docx-heal report.pdf --mode editable      # a reflowing document that is easy to edit
+pdf2docx-heal report.pdf --mode editable      # looks like the PDF, reflows when you edit
 pdf2docx-heal scan.pdf --ocr --ocr-lang eng   # scanned PDFs (needs Tesseract)
 ```
 
@@ -81,10 +81,12 @@ heal("report.pdf", "report.docx", config=HealerConfig(mode="editable"))
 | | `fidelity` (default) | `editable` |
 | --- | --- | --- |
 | How | `pdf2docx` page by page, then repair passes | Rebuilds the document from the PDF's text, tables and images |
-| Looks like | The PDF page | A normal Word document that reflows |
+| Looks like | The PDF page | The PDF page, as a normal Word document that reflows when you edit it |
 | Best for | Forms, layouts you must keep | Papers, reports, books, right-to-left text, anything you will edit |
 
 Both modes add Word heading styles (from the PDF outline, or font sizes when there is none), real Word lists, clickable web and mail links, internal links for citations and cross references, and font fallbacks for CJK, Arabic, Hebrew, Thai and Devanagari.
+
+Editable mode copies the look of each page: the font family, size, colour, bold and italic of every word, paragraph alignment, indents, the gap between paragraphs, the line spacing, page size, margins and columns. Text running up the margin and boxes set beside other text stay where they are on the page, and white text keeps the coloured box behind it.
 
 In editable mode, repeating headers, footers, logos and page numbers move into the Word header and footer. Lists come through with their real format: bullets, `1.`, `a)`, `iii.`, and outlines like `1.2.3`.
 
@@ -103,6 +105,18 @@ Run on 2026-11-26 with healer 0.3.0, pdf2docx 0.5.13, pdf2docx-plus 0.6.10 and L
 | LibreOffice | 0.698 | 0.929 | 0.00 | 0.00 | 0.00 | 0.00 | 0.23 | **0.93** | 36/230 | 11.0 |
 
 Where the others still win: LibreOffice has the best image score, because the score counts raster images only, so it gets credit for leaving out the vector charts that healer turns into pictures. pdf2docx-plus scores better on tables than healer's default mode (0.64 against 0.50; editable mode scores 0.88). In editable mode healer is a little behind pdf2docx-plus on the Chinese text (0.958 against 0.993) and on the Mixtral paper (0.928 against 0.951); the default mode scores 1.000 and 0.950 on those two.
+
+### Does it look like the PDF?
+
+`python -m bench.visual --renderer word` opens each DOCX in Word, saves it as a PDF and compares it with the original word by word: is the word on the same page, near the same spot, and in the same size, colour, weight, slant and kind of font. It also writes side-by-side pictures of every page. First 3 pages of each document, 2026-11-26:
+
+| Mode | Same page | Same spot | Size | Colour | Bold | Italic | Font kind |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| **healer editable 0.4.0** | **0.74** | **0.41** | **0.74** | **0.74** | **0.73** | **0.74** | 0.58 |
+| healer default 0.4.0 | 0.70 | **0.41** | 0.65 | 0.69 | 0.67 | 0.69 | **0.60** |
+| healer editable 0.3.2 | 0.49 | 0.07 | 0.36 | 0.39 | 0.46 | 0.48 | 0.32 |
+
+The scanned patent scores 0 in both modes because it has no text layer. LibreOffice lays the same files out a little differently (editable 0.58 same page, 0.25 same spot), mostly because it does not squeeze word spaces in justified text the way Word and TeX do, and it handles right-to-left text in pinned boxes less well. Drawn lines and shapes are not copied yet.
 
 ## Options
 

@@ -203,6 +203,7 @@ class Para:
     last_line_text: str = ""
     hyphens: int = 0
     shade: Optional[int] = None
+    breaks: List[int] = field(default_factory=list)
     boxes: List[Tuple[Tuple[Any, ...], Rect, float]] = field(default_factory=list)
 
     @property

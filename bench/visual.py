@@ -1,6 +1,7 @@
 """Compare how a converted DOCX looks against its PDF.
 
-The DOCX is laid out by LibreOffice Writer and saved as a PDF. Every word of the original is
+The DOCX is laid out by LibreOffice Writer or Microsoft Word (``--renderer word``, Windows
+with Word installed) and saved as a PDF. Every word of the original is
 then looked up on the same page of that rendering: is it there, is it in the same place, and
 does it keep its size, colour, weight, slant and serif or sans font. Side-by-side pictures of
 each page are written so a person can check the numbers by eye.
