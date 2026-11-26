@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96" viewBox="0 0 80 84" role="img" aria-label="pdf2docx-healer">
+  <path fill="#191919" stroke="#e8ecf0" stroke-width="4" stroke-linejoin="round" d="M10 2h34l18 18v54a6 6 0 0 1-6 6H10a6 6 0 0 1-6-6V8a6 6 0 0 1 6-6z"/>
+  <path fill="#191919" stroke="#e8ecf0" stroke-width="4" stroke-linejoin="round" d="M44 2v12a6 6 0 0 0 6 6h12"/>
+  <rect fill="#338ced" x="13" y="26" width="26" height="6" rx="3"/>
+  <rect fill="#4a5561" x="13" y="38" width="34" height="4" rx="2"/>
+  <circle fill="#e8ecf0" cx="15" cy="50" r="2.5"/>
+  <rect fill="#4a5561" x="21" y="48" width="20" height="4" rx="2"/>
+  <circle fill="#e8ecf0" cx="15" cy="60" r="2.5"/>
+  <rect fill="#4a5561" x="21" y="58" width="16" height="4" rx="2"/>
+  <circle fill="#338ced" cx="58" cy="66" r="16"/>
+  <rect fill="#ffffff" x="55" y="57" width="6" height="18" rx="2"/>
+  <rect fill="#ffffff" x="49" y="63" width="18" height="6" rx="2"/>
+</svg>

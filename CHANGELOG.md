@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.2
+
+### Changed
+- README: a header with the icon, a card showing a real PDF page next to the Word document healer makes from it, and a plain comparison with pdf2docx, pdf2docx-plus and LibreOffice.
+
 ## 0.3.1
 
 ### Changed
