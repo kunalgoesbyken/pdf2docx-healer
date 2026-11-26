@@ -5,6 +5,7 @@ import sys
 from pathlib import Path
 from typing import List, Optional
 
+from . import __version__
 from .converter import HealerConfig, heal
 from .errors import InvalidInputError
 from .log import logger
@@ -17,8 +18,9 @@ EXIT_USAGE = 2
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="pdf2docx-heal",
-        description="Convert PDF to DOCX preserving bullet lists, hyperlinks, and CJK fonts.",
+        description="Convert PDF to DOCX, keeping headings, lists, links, tables and fonts.",
     )
+    parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     parser.add_argument("pdf", type=Path, help="Input PDF file path")
     parser.add_argument("-o", "--output", type=Path, default=None,
                         help="Output DOCX file path (default: input filename with .docx extension)")
