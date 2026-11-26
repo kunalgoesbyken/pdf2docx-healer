@@ -1,0 +1,86 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="880" height="472" viewBox="0 0 880 472" role="img" aria-label="Benchmark results" font-family="Segoe UI, Inter, Helvetica, Arial, sans-serif">
+<style>
+.surface { fill: #ffffff; stroke: #e3e6ea; }
+.title { fill: #1f2933; font-weight: 700; font-size: 20px; }
+.sub, .value, .label { fill: #4f5b67; font-size: 13px; }
+.label.focus, .value.focus { fill: #1f2933; font-weight: 600; }
+.head { fill: #1f2933; font-weight: 600; font-size: 15px; }
+.base { stroke: #c3cad3; stroke-width: 1; }
+.bar { fill: #8c96a1; }
+.bar.focus { fill: #257de0; }
+@media (prefers-color-scheme: dark) {
+  .surface { fill: #191919; stroke: #33383d; }
+  .title, .head, .label.focus, .value.focus { fill: #e8ecf0; }
+  .sub, .value, .label { fill: #a9b3bd; }
+  .base { stroke: #4a5561; }
+  .bar { fill: #6b7580; }
+  .bar.focus { fill: #338ced; }
+}
+</style>
+<rect class="surface" x="0.5" y="0.5" width="879" height="471" rx="12"/>
+<text class="title" x="32" y="44">PDF to Word: how much structure survives</text>
+<text class="sub" x="32" y="68">13 PDFs, 230 pages, run 2026-11-26. Higher is better. Blue is pdf2docx-healer, gray is other tools.</text>
+<text class="head" x="32" y="104">Words kept in reading order</text>
+<text class="label focus" x="162" y="130.5" text-anchor="end">healer-editable</text>
+<path class="bar focus" d="M172.0 118.0h184.1a4 4 0 0 1 4 4v8.0a4 4 0 0 1 -4 4h-184.1z"><title>healer-editable: 0.94</title></path>
+<text class="value focus" x="368.1" y="130.5">0.94</text>
+<text class="label focus" x="162" y="156.5" text-anchor="end">healer-fidelity</text>
+<path class="bar focus" d="M172.0 144.0h171.8a4 4 0 0 1 4 4v8.0a4 4 0 0 1 -4 4h-171.8z"><title>healer-fidelity: 0.88</title></path>
+<text class="value focus" x="355.8" y="156.5">0.88</text>
+<text class="label" x="162" y="182.5" text-anchor="end">pdf2docx-plus</text>
+<path class="bar" d="M172.0 170.0h167.0a4 4 0 0 1 4 4v8.0a4 4 0 0 1 -4 4h-167.0z"><title>pdf2docx-plus: 0.86</title></path>
+<text class="value" x="351.0" y="182.5">0.86</text>
+<text class="label" x="162" y="208.5" text-anchor="end">pdf2docx</text>
+<path class="bar" d="M172.0 196.0h165.6a4 4 0 0 1 4 4v8.0a4 4 0 0 1 -4 4h-165.6z"><title>pdf2docx: 0.85</title></path>
+<text class="value" x="349.6" y="208.5">0.85</text>
+<text class="label" x="162" y="234.5" text-anchor="end">libreoffice</text>
+<path class="bar" d="M172.0 222.0h135.5a4 4 0 0 1 4 4v8.0a4 4 0 0 1 -4 4h-135.5z"><title>libreoffice: 0.70</title></path>
+<text class="value" x="319.5" y="234.5">0.70</text>
+<line class="base" x1="172" x2="172" y1="114" y2="242"/>
+<text class="head" x="442" y="104">Headings found</text>
+<text class="label focus" x="572" y="130.5" text-anchor="end">healer-editable</text>
+<path class="bar focus" d="M582.0 118.0h154.3a4 4 0 0 1 4 4v8.0a4 4 0 0 1 -4 4h-154.3z"><title>healer-editable: 0.79</title></path>
+<text class="value focus" x="748.3" y="130.5">0.79</text>
+<text class="label focus" x="572" y="156.5" text-anchor="end">healer-fidelity</text>
+<path class="bar focus" d="M582.0 144.0h136.7a4 4 0 0 1 4 4v8.0a4 4 0 0 1 -4 4h-136.7z"><title>healer-fidelity: 0.70</title></path>
+<text class="value focus" x="730.7" y="156.5">0.70</text>
+<text class="label" x="572" y="182.5" text-anchor="end">pdf2docx-plus</text>
+<text class="value" x="590.0" y="182.5">0.00</text>
+<text class="label" x="572" y="208.5" text-anchor="end">pdf2docx</text>
+<text class="value" x="590.0" y="208.5">0.00</text>
+<text class="label" x="572" y="234.5" text-anchor="end">libreoffice</text>
+<text class="value" x="590.0" y="234.5">0.00</text>
+<line class="base" x1="582" x2="582" y1="114" y2="242"/>
+<text class="head" x="32" y="288">Lists that are real Word lists</text>
+<text class="label focus" x="162" y="314.5" text-anchor="end">healer-editable</text>
+<path class="bar focus" d="M172.0 302.0h196.0a4 4 0 0 1 4 4v8.0a4 4 0 0 1 -4 4h-196.0z"><title>healer-editable: 1.00</title></path>
+<text class="value focus" x="380.0" y="314.5">1.00</text>
+<text class="label focus" x="162" y="340.5" text-anchor="end">healer-fidelity</text>
+<path class="bar focus" d="M172.0 328.0h148.0a4 4 0 0 1 4 4v8.0a4 4 0 0 1 -4 4h-148.0z"><title>healer-fidelity: 0.76</title></path>
+<text class="value focus" x="332.0" y="340.5">0.76</text>
+<text class="label" x="162" y="366.5" text-anchor="end">pdf2docx-plus</text>
+<path class="bar" d="M172.0 354.0h132.0a4 4 0 0 1 4 4v8.0a4 4 0 0 1 -4 4h-132.0z"><title>pdf2docx-plus: 0.68</title></path>
+<text class="value" x="316.0" y="366.5">0.68</text>
+<text class="label" x="162" y="392.5" text-anchor="end">pdf2docx</text>
+<text class="value" x="180.0" y="392.5">0.00</text>
+<text class="label" x="162" y="418.5" text-anchor="end">libreoffice</text>
+<text class="value" x="180.0" y="418.5">0.00</text>
+<line class="base" x1="172" x2="172" y1="298" y2="426"/>
+<text class="head" x="442" y="288">Tables</text>
+<text class="label focus" x="572" y="314.5" text-anchor="end">healer-editable</text>
+<path class="bar focus" d="M582.0 302.0h172.3a4 4 0 0 1 4 4v8.0a4 4 0 0 1 -4 4h-172.3z"><title>healer-editable: 0.88</title></path>
+<text class="value focus" x="766.3" y="314.5">0.88</text>
+<text class="label focus" x="572" y="340.5" text-anchor="end">healer-fidelity</text>
+<path class="bar focus" d="M582.0 328.0h96.9a4 4 0 0 1 4 4v8.0a4 4 0 0 1 -4 4h-96.9z"><title>healer-fidelity: 0.50</title></path>
+<text class="value focus" x="690.9" y="340.5">0.50</text>
+<text class="label" x="572" y="366.5" text-anchor="end">pdf2docx-plus</text>
+<path class="bar" d="M582.0 354.0h124.6a4 4 0 0 1 4 4v8.0a4 4 0 0 1 -4 4h-124.6z"><title>pdf2docx-plus: 0.64</title></path>
+<text class="value" x="718.6" y="366.5">0.64</text>
+<text class="label" x="572" y="392.5" text-anchor="end">pdf2docx</text>
+<path class="bar" d="M582.0 380.0h62.9a4 4 0 0 1 4 4v8.0a4 4 0 0 1 -4 4h-62.9z"><title>pdf2docx: 0.33</title></path>
+<text class="value" x="656.9" y="392.5">0.33</text>
+<text class="label" x="572" y="418.5" text-anchor="end">libreoffice</text>
+<path class="bar" d="M582.0 406.0h42.2a4 4 0 0 1 4 4v8.0a4 4 0 0 1 -4 4h-42.2z"><title>libreoffice: 0.23</title></path>
+<text class="value" x="636.2" y="418.5">0.23</text>
+<line class="base" x1="582" x2="582" y1="298" y2="426"/>
+</svg>

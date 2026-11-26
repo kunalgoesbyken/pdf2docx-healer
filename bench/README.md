@@ -10,6 +10,7 @@ python -m bench.fetch                 # download and verify the corpus into benc
 python -m bench.run                   # every tool on every non-slow document, plus the synthetic PDF
 python -m bench.run --include-slow    # also the 492-page document
 python -m bench.run --only irs-fw9-form synthetic --tools pdf2docx healer-fidelity
+python -m bench.chart bench/results/<date>.json docs/assets/benchmark.svg   # redraw the README chart
 ```
 
 Results land in `bench/results/<date>.json` (every row, plus commit and package versions) and `bench/results/<date>.md` (the scoreboard below, ready to paste). Both folders are git-ignored; downloads go to `bench/.cache`. Downloaded files are only ever opened with PyMuPDF and never executed. `python -m bench.fetch --pin` records new SHA-256 values and page counts into `corpus.json`.
