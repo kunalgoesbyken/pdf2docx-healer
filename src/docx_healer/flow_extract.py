@@ -25,6 +25,12 @@ from .flow_text import clean_text, collapse_spaces
 from .log import logger
 
 _BAND = 20.0
+_TURNS = {(0, -1): "btLr", (0, 1): "tbRl"}
+_SHADE_SCALE = 0.5
+_CHAR_BOLD = 8
+_FILL_AND_STROKE = 48
+_SHADE_REACH = 3.0
+_WHITE = 0xFFFFFF
 _BOLD_NAME = re.compile(r"bold|black|heavy", re.IGNORECASE)
 _ITALIC_NAME = re.compile(r"italic|oblique", re.IGNORECASE)
 _SUPER_RATIO = 0.85
@@ -76,10 +82,12 @@ def extract_page(page: Any, budget: Budget) -> PageData:
         edge = max(line.bbox[2] for line in lines)
         for line in lines:
             line.edge = edge
-        data.units.append(Unit(lines, rotated=len(along) < len(block["lines"]) / 2))
+        rotated = len(along) < len(block["lines"]) / 2
+        data.units.append(Unit(lines, rotated, _turn(block["lines"]) if rotated else ""))
         unit_index += 1
     _add_tables(page, data, budget)
     _add_figures(page, data, budget)
+    _shade_lines(page, data)
     return data
 
 
@@ -114,6 +122,14 @@ def _page_blocks(page: Any, budget: Budget) -> List[Dict[str, Any]]:
 
 def _direction(raw: Dict[str, Any]) -> Tuple[int, int]:
     return (round(raw["dir"][0]), round(raw["dir"][1]))
+
+
+def _turn(raws: List[Dict[str, Any]]) -> str:
+    """Return the Word text direction of lines running up or down the page, else nothing."""
+    counts: Dict[Tuple[int, int], int] = {}
+    for raw in raws:
+        counts[_direction(raw)] = counts.get(_direction(raw), 0) + 1
+    return _TURNS.get(max(counts, key=lambda d: counts[d]), "") if counts else ""
 
 
 def _dominant_direction(blocks: List[Dict[str, Any]]) -> Tuple[int, int]:
@@ -152,7 +168,7 @@ def _glue_rows(lines: List[Line]) -> List[Line]:
 def _join_row(left: Line, right: Line) -> Line:
     spans = list(left.spans)
     if not left.text.endswith(" ") and not right.text.startswith(" "):
-        spans.append(Span(" ", left.spans[-1].size, font=left.spans[-1].font))
+        spans.append(replace(left.spans[-1], text=" ", link=None, sup=False, sub=False))
     spans.extend(right.spans)
     heads = (left.head_x + [left.bbox[2]] + right.head_x)[:_HEAD_CHARS]
     bbox = (
@@ -160,7 +176,9 @@ def _join_row(left: Line, right: Line) -> Line:
         max(left.bbox[2], right.bbox[2]), max(left.bbox[3], right.bbox[3]),
     )
     size = left.size if len(left.text) >= len(right.text) else right.size
-    return Line(spans, bbox, left.page, left.unit, size, left.bold and right.bold, heads)
+    return Line(
+        spans, bbox, left.page, left.unit, size, left.bold and right.bold, heads, base=left.base
+    )
 
 
 def _page_links(page: Any, budget: Budget) -> Dict[int, List[Tuple[Rect, LinkKey]]]:
@@ -235,10 +253,18 @@ def _style(raw_span: Dict[str, Any], dominant: Optional[Dict[str, Any]]) -> Span
     font = raw_span.get("font", "")
     sup, sub = _script_position(raw_span, dominant, flags)
     return Span(
-        "", float(raw_span["size"]), bold=bool(flags & 16) or bool(_BOLD_NAME.search(font)),
+        "", float(raw_span["size"]),
+        bold=bool(flags & 16) or bool(_BOLD_NAME.search(font)) or _drawn_bold(raw_span),
         italic=bool(flags & 2) or bool(_ITALIC_NAME.search(font)), mono=bool(flags & 8),
-        sup=sup, sub=sub, font=font,
+        sup=sup, sub=sub, font=font, color=int(raw_span.get("color") or 0),
+        serif=bool(flags & 4),
     )
+
+
+def _drawn_bold(raw_span: Dict[str, Any]) -> bool:
+    """Whether MuPDF saw the glyphs drawn bold, or filled and outlined to look bold."""
+    marks = int(raw_span.get("char_flags") or 0)
+    return bool(marks & _CHAR_BOLD) or marks & _FILL_AND_STROKE == _FILL_AND_STROKE
 
 
 def _build_line(
@@ -269,8 +295,9 @@ def _build_line(
     for span in spans:
         sizes[span.size] = sizes.get(span.size, 0) + len(span.text)
     size = max(sizes, key=lambda s: sizes[s])
-    bold = all(span.bold for span in visible)
-    return Line(spans, _rect(raw["bbox"]), page_number, unit, size, bold, head_x)
+    bold = all(span.bold for span in visible if not (span.sup or span.sub))
+    base = float(dominant["origin"][1]) if dominant else _rect(raw["bbox"])[3]
+    return Line(spans, _rect(raw["bbox"]), page_number, unit, size, bold, head_x, base=base)
 
 
 def _dominant_span(spans: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
@@ -472,6 +499,39 @@ def _add_figures(page: Any, data: PageData, budget: Budget) -> None:
         _rasterise_figures(page, data, budget)
     finally:
         budget.table_seconds_left -= time.perf_counter() - started
+
+
+def _shade_lines(page: Any, data: PageData) -> None:
+    """Record the colour the page shows just beside each text line, when it is not white.
+
+    The page is drawn small and the colour read at both ends of the line, so a background
+    from a filled shape or from a picture is found the same way.
+    """
+    lines = [line for unit in data.units for line in unit.lines]
+    if not lines:
+        return
+    try:
+        pixmap = page.get_pixmap(matrix=pymupdf.Matrix(_SHADE_SCALE, _SHADE_SCALE), alpha=False)
+    except Exception as exc:
+        logger.debug("Background colours skipped on page %d: %s", data.number + 1, exc)
+        return
+    for line in lines:
+        y = (line.bbox[1] + line.bbox[3]) / 2
+        samples = [
+            _pixel(pixmap, x, y)
+            for x in (line.bbox[0] - _SHADE_REACH, line.bbox[2] + _SHADE_REACH)
+        ]
+        found = [value for value in samples if value is not None]
+        if len(found) == len(samples) and len(set(found)) == 1 and found[0] != _WHITE:
+            line.shade = found[0]
+
+
+def _pixel(pixmap: Any, x: float, y: float) -> Optional[int]:
+    column, row = int(x * _SHADE_SCALE), int(y * _SHADE_SCALE)
+    if not (0 <= column < pixmap.width and 0 <= row < pixmap.height):
+        return None
+    red, green, blue = pixmap.pixel(column, row)[:3]
+    return (red << 16) | (green << 8) | blue
 
 
 def _rasterise_figures(page: Any, data: PageData, budget: Budget) -> None:

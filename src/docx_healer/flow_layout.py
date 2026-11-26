@@ -3,6 +3,7 @@
 import math
 import re
 from collections import Counter
+from dataclasses import replace
 from functools import partial
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 
@@ -43,6 +44,8 @@ _SIDE_BY_SIDE = -0.6
 _SIZE_JUMP = 0.15
 _INDENT = 0.8
 _CENTER_SHARE = 0.03
+_CENTER_TOLERANCE = 0.3
+_MIN_CENTER = 1.5
 _TERMINAL = re.compile(r"[.!?:;\u2026\u3002\uff01\uff1f][\"'\u201d\u2019)\]]*$")
 _START_TOKENS = {
     ("decimal", 1), ("lowerLetter", 1), ("upperLetter", 1), ("lowerRoman", 1), ("upperRoman", 1),
@@ -139,9 +142,11 @@ def _running_line(
     parts = _page_parts(where)
     if parts is None:
         return None
+    main = max(line.spans, key=lambda span: len(span.text.strip()))
     return RunningLine(
         parts, line.size, line.bold, _alignment(line.bbox, page_width),
         strong_direction(line.text) == "rtl", first in where,
+        font=main.font, color=main.color, italic=main.italic, box=line.bbox,
     )
 
 
@@ -278,6 +283,7 @@ def order_page(page: PageData, size: float) -> List[Tuple[Any, Seg]]:
     rtl = strong_direction(" ".join(line.text for unit in flow for line in unit.lines)) == "rtl"
     items: List[Any] = flow + list(page.tables) + list(page.images)
     gutters = _gutters(flow, size, [t.bbox for t in page.tables] + [i.bbox for i in page.images])
+    page.gutters, page.rtl = gutters, rtl
     ordered: List[Tuple[Any, Seg]] = []
     run: List[Any] = []
     runs = 0
@@ -302,7 +308,7 @@ def order_page(page: PageData, size: float) -> List[Tuple[Any, Seg]]:
             run.append(item)
     flush()
     for index, unit in enumerate(u for u in page.units if u.rotated):
-        ordered.append((unit, (page.number, "rotated", index)))
+        ordered.append((unit, (page.number, "rotated", index, unit.turn)))
     return ordered
 
 
@@ -356,7 +362,7 @@ def _continues(cur: Para, prev: Line, line: Line, page_width: float) -> bool:
     delta = line.bbox[0] - prev.bbox[0]
     centered = abs(
         (line.bbox[0] + line.bbox[2]) / 2 - (prev.bbox[0] + prev.bbox[2]) / 2
-    ) < _CENTER_SHARE * page_width
+    ) < min(_CENTER_SHARE * page_width, max(_MIN_CENTER, _CENTER_TOLERANCE * size))
     if cur.marker is not None:
         full = prev.bbox[2] >= prev.edge - 0.5 * size
         return line.bbox[0] >= cur.marker_x - 0.5 * size or full
@@ -373,6 +379,7 @@ def _new_para(line: Line, seg: Seg, page_width: float) -> Para:
     para = Para(
         spans=spans, page=line.page, seg=seg, bbox=line.bbox, x0=line.bbox[0],
         size=line.size, bold=line.bold, last_line_text=line.text,
+        boxes=[(seg, line.bbox, line.base)], shade=line.shade,
     )
     _trim(para.spans, leading=True)
     if marker is not None:
@@ -389,7 +396,8 @@ def _trim(spans: List[Span], leading: bool = False, trailing: bool = True) -> No
         spans[-1].text = spans[-1].text.rstrip()
 
 
-def _append_line(para: Para, line: Line, vocab: Set[str]) -> None:
+def _append_line(para: Para, line: Line, vocab: Set[str]) -> int:
+    """Add the line to the paragraph; return where its text starts in the paragraph text."""
     previous = para.last_line_text.rstrip()
     following = line.text.lstrip()
     drop, space = join_decision(previous, following, vocab)
@@ -398,16 +406,21 @@ def _append_line(para: Para, line: Line, vocab: Set[str]) -> None:
     _trim(para.spans)
     if drop and para.spans:
         para.spans[-1].text = para.spans[-1].text[:-1]
+        para.hyphens += 1
     if space and para.spans:
         last = para.spans[-1]
         if last.link is not None:
-            para.spans.append(Span(" ", last.size, last.bold, last.italic, last.mono))
+            para.spans.append(replace(last, text=" ", link=None))
         else:
             last.text += " "
+    start = len(para.text)
+    if not drop:
+        para.breaks.append(start)
     para.spans.extend(spans)
     para.lines += 1
     para.bbox = union([para.bbox, line.bbox])
     para.last_line_text = line.text
+    return start
 
 
 def finish_para(para: Para) -> None:
@@ -462,7 +475,7 @@ def _glue_markers(stream: List[Tuple[Any, Seg]]) -> List[Tuple[Any, Seg]]:
             merged = Line(
                 spans + following.spans, union([item.bbox, following.bbox]), following.page,
                 following.unit, following.size, following.bold,
-                heads + [item.bbox[2]] + following.head_x,
+                heads + [item.bbox[2]] + following.head_x, base=following.base,
             )
             glued.append((merged, seg))
             index += 2
@@ -490,6 +503,7 @@ def assemble(
             if cur is not None:
                 finish_para(cur)
             cur, prev = None, None
+            item.seg = seg
             blocks.append(item)
             continue
         upcoming = partial(_following, stream, index, lookahead)
@@ -497,6 +511,7 @@ def assemble(
                 and _continues(cur, prev, item, page_width) \
                 and not _marker_starts(cur, item, upcoming):
             _append_line(cur, item, vocab)
+            cur.boxes.append((seg, item.bbox, item.base))
         else:
             if cur is not None:
                 finish_para(cur)
@@ -515,9 +530,12 @@ def join_across_segments(blocks: List[Block], vocab: Set[str]) -> List[Block]:
         last = result[-1] if result else None
         if isinstance(block, Para) and isinstance(last, Para) and _joinable(last, block):
             line = Line(block.spans, block.bbox, block.page, 0, block.size, block.bold)
-            _append_line(last, line, vocab)
+            start = _append_line(last, line, vocab)
+            last.breaks.extend(start + offset for offset in block.breaks)
             last.lines += block.lines - 1
             last.last_line_text = block.last_line_text
+            last.boxes.extend(block.boxes)
+            last.hyphens += block.hyphens
             finish_para(last)
             continue
         result.append(block)

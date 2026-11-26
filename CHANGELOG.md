@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.4.0
+
+### Added
+- Editable mode copies the look of the PDF: font family (with metric-compatible stand-ins such as Times New Roman for Nimbus Roman), size, colour, bold and italic of every run; paragraph alignment, indents, space before and exact line spacing; page size, margins and columns, with a new section where the column layout changes; centred and right-aligned lines keep their breaks. Heading and title styles no longer add their own blue Calibri look.
+- Text running up or down the margin and blocks that sit beside other text are pinned at their place on the page. Text on a coloured box keeps the colour behind it as paragraph shading, and text that would be white on white keeps the body colour.
+- Word hyphenates and squeezes word spaces when the PDF was typeset that way, so justified lines fill the same.
+- `python -m bench.visual` renders the DOCX (Word or LibreOffice) and compares it with the PDF word by word, with side-by-side pictures.
+
+### Changed
+- Default mode's font fixer uses the same font family resolver.
+
+### Fixed
+- Lines in a tight block, such as a list of author names, are no longer marked as headings.
+- A paragraph that starts with an indented first line right after a short last line is no longer merged into the paragraph above.
+- A bold line with superscript marks, such as the stars after author names, still counts as bold.
+
 ## 0.3.2
 
 ### Changed
