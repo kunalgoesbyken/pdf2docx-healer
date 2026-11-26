@@ -119,7 +119,7 @@ The output is written only when the whole conversion has finished, so a failure 
 ## Requirements
 
 - Python 3.10+
-- `pdf2docx >= 0.5.9, < 0.6`, `PyMuPDF >= 1.26.7`, `python-docx >= 0.8.11`, `lxml >= 4.9`
+- `pdf2docx >= 0.5.9, < 0.6`, `PyMuPDF >= 1.27.1`, `python-docx >= 1.1.0`, `lxml >= 4.9`
 - [Tesseract](https://github.com/tesseract-ocr/tesseract), optional, for OCR
 
 ---

@@ -281,7 +281,8 @@ def _resolve_destinations(
             line = _destination_line(page, point)
             found = _locate(scope, page.blocks[line.block], line.start, line.end) if line else None
             if found is not None:
-                resolved[(number, *point)] = scope.paragraphs[found[0]]
+                key = (number, *point)
+                resolved[key] = scope.paragraphs[found[0]]
     return resolved
 
 
@@ -342,7 +343,8 @@ def _place_anchors(
                 continue
             for run, start, end in ranges:
                 claimed.setdefault(run, set()).update(range(start, end))
-            placements.append(_Placement(destinations[(link.target, *link.point)], ranges))
+            key = (link.target, *link.point)
+            placements.append(_Placement(destinations[key], ranges))
     return placements
 
 

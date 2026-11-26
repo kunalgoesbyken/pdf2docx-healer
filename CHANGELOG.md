@@ -18,7 +18,7 @@
 - A quadratic scan over images made large documents slow.
 
 ### Changed
-- Requires Python 3.10 or newer, `PyMuPDF>=1.26.7` and `lxml>=4.9`; every pdf2docx release this package supports already needed them.
+- Requires Python 3.10 or newer, `PyMuPDF>=1.27.1`, `python-docx>=1.1.0` and `lxml>=4.9`. Older PyMuPDF groups figures differently, python-docx 1.0 cannot be imported by this package, and 0.8 does not read link text.
 - Built and published with uv; each release is also attached to its GitHub release.
 
 ## 0.2.0
