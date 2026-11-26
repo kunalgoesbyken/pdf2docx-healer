@@ -3,17 +3,23 @@
 import logging
 import os
 import tempfile
-from contextlib import contextmanager, nullcontext
+from contextlib import ExitStack, contextmanager
 from dataclasses import dataclass
 from pathlib import Path
-from typing import ContextManager, Iterator, Optional
+from typing import Any, Iterator, Optional
 
 from .errors import InvalidInputError
 from .files import PathLike, remove_quietly, resolve_input_pdf, resolve_output_path
+from .flow_writer import write_editable_docx
+from .layout_tables import layout_table_filter
 from .log import progress
 from .ocr_pipeline import prepare_ocr_copy
-from .patches import list_item_patches
+from .page_recovery import convert_with_recovery
+from .patches import keep_word_spaces, list_item_patches
 from .post_processor import post_process_docx
+from .speedups import cached_image_listing, cached_table_cells
+
+MODES = ("fidelity", "editable")
 
 
 @dataclass
@@ -28,6 +34,12 @@ class HealerConfig:
     fix_lists: bool = True
     fix_hyperlinks: bool = True
     fix_fonts: bool = True
+    fix_headings: bool = True
+    fix_internal_links: bool = True
+    recover_pages: bool = True
+    fix_tables: bool = True
+
+    mode: str = "fidelity"
 
     aggressive_lists: bool = False
 
@@ -42,6 +54,8 @@ class HealerConfig:
             raise InvalidInputError(f"ocr_dpi must be positive, got {self.ocr_dpi}")
         if not self.ocr_lang.strip():
             raise InvalidInputError("ocr_lang must not be empty")
+        if self.mode not in MODES:
+            raise InvalidInputError(f"mode must be one of {', '.join(MODES)}, got {self.mode!r}")
 
 
 def heal(
@@ -62,12 +76,19 @@ def heal(
     pdf = resolve_input_pdf(pdf_path)
     output = resolve_output_path(docx_path, pdf)
 
+    editable = config.mode == "editable"
     with _source_pdf(pdf, config) as source, _staged_output(output) as staged:
-        _convert(source, staged, config)
+        if editable:
+            write_editable_docx(source, staged, verbose=config.verbose)
+        else:
+            _convert(source, staged, config)
         post_process_docx(
             staged,
-            fix_lists=config.fix_lists,
+            pdf_path=source,
+            fix_headings=config.fix_headings and not editable,
+            fix_lists=config.fix_lists and not editable,
             fix_hyperlinks=config.fix_hyperlinks,
+            fix_internal_links=config.fix_internal_links and not editable,
             fix_fonts=config.fix_fonts,
             aggressive_lists=config.aggressive_lists,
             verbose=config.verbose,
@@ -122,15 +143,34 @@ def _root_log_level(level: Optional[int]) -> Iterator[None]:
         root.setLevel(previous)
 
 
+def _require_readable(converter: Any, pdf_path: str) -> None:
+    document = converter.fitz_doc
+    if document.needs_pass:
+        raise InvalidInputError(f"PDF is password protected: {pdf_path}")
+    if len(document) == 0:
+        raise InvalidInputError(f"PDF has no pages: {pdf_path}")
+
+
 def _convert(pdf_path: str, docx_path: str, config: HealerConfig) -> None:
     from pdf2docx import Converter
 
     progress(config.verbose, "Converting...")
-    patches: ContextManager[None] = list_item_patches() if config.fix_lists else nullcontext()
-    quiet_level = None if config.verbose else logging.WARNING
-    with _root_log_level(quiet_level), patches:
+    own_progress = config.recover_pages
+    quiet_level = None if config.verbose and not own_progress else logging.WARNING
+    with _root_log_level(quiet_level), ExitStack() as patches:
+        if config.fix_lists:
+            patches.enter_context(list_item_patches())
+        if config.fix_tables:
+            patches.enter_context(layout_table_filter())
+        patches.enter_context(keep_word_spaces())
+        patches.enter_context(cached_image_listing())
+        patches.enter_context(cached_table_cells())
         converter = Converter(pdf_path)
         try:
-            converter.convert(docx_path)
+            _require_readable(converter, pdf_path)
+            if config.recover_pages:
+                convert_with_recovery(converter, docx_path, config.verbose)
+            else:
+                converter.convert(docx_path)
         finally:
             converter.close()

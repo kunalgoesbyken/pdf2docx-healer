@@ -53,3 +53,11 @@ def test_invalid_numeric_options_exit_with_usage_error(tmp_path, flag):
 
 def test_version_matches_installed_metadata():
     assert docx_healer.__version__ == metadata.version("pdf2docx-healer")
+
+
+def test_version_flag_prints_the_version_and_exits_zero(capsys):
+    with pytest.raises(SystemExit) as raised:
+        main(["--version"])
+
+    assert raised.value.code == 0
+    assert capsys.readouterr().out.strip() == f"pdf2docx-heal {docx_healer.__version__}"

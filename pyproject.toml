@@ -5,29 +5,28 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "pdf2docx-healer"
 dynamic = ["version"]
-description = "Formatting-preserving PDF-to-DOCX converter that fixes bullet lists, hyperlinks, CJK fonts, and scanned PDFs"
+description = "PDF to Word (DOCX) converter that keeps headings, real lists, links, tables and right-to-left text; a drop-in upgrade for pdf2docx"
 readme = "README.md"
 license = "MIT"
-requires-python = ">=3.8"
+requires-python = ">=3.10"
 dependencies = [
     "pdf2docx>=0.5.9,<0.6",
-    "PyMuPDF>=1.23.0",
-    "python-docx>=0.8.11",
-    "lxml",
+    "PyMuPDF>=1.27.1",
+    "python-docx>=1.1.0",
+    "lxml>=4.9",
 ]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.8",
-    "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Topic :: Text Processing",
     "Topic :: Office/Business :: Office Suites",
 ]
-keywords = ["pdf", "docx", "converter", "pdf-to-docx", "formatting", "hyperlink", "ocr", "cjk", "bullet-list"]
+keywords = ["pdf", "docx", "word", "converter", "pdf-to-docx", "pdf-to-word", "pdf2docx", "headings", "lists", "hyperlink", "ocr", "cjk", "rtl"]
 
 [project.optional-dependencies]
 dev = [
@@ -54,16 +53,17 @@ where = ["src"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["."]
 addopts = "-ra"
 
 [tool.ruff]
 line-length = 100
-target-version = "py38"
-src = ["src", "tests"]
+target-version = "py310"
+src = ["src", "tests", "."]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP"]
-ignore = ["UP006", "UP007", "UP035"]
+ignore = ["UP006", "UP007", "UP035", "UP045", "B905"]
 
 [tool.ruff.lint.per-file-ignores]
 "src/docx_healer/constants.py" = ["E501"]

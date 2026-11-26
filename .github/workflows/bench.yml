@@ -1,0 +1,59 @@
+name: Benchmark
+
+on:
+  workflow_dispatch:
+    inputs:
+      include_slow:
+        description: "Also run the slow, 100+ page document"
+        type: boolean
+        default: false
+      timeout:
+        description: "Seconds allowed for one conversion"
+        default: "900"
+
+jobs:
+  bench:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install
+        run: pip install -e ".[dev]"
+
+      - name: Install the rival converters
+        run: |
+          python -m venv .bench-plus
+          .bench-plus/bin/pip install pdf2docx-plus
+          echo "BENCH_PDF2DOCX_PLUS=$PWD/.bench-plus/bin/pdf2docx-plus" >> "$GITHUB_ENV"
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libreoffice-writer
+
+      - name: Cache corpus and ground truth
+        uses: actions/cache@v4
+        with:
+          path: bench/.cache
+          key: bench-cache-${{ hashFiles('bench/corpus.json') }}
+          restore-keys: bench-cache-
+
+      - name: Scorer tests
+        run: pytest -q tests/test_bench_*.py
+
+      - name: Run benchmark
+        run: >
+          python -m bench.run
+          --timeout ${{ inputs.timeout }}
+          ${{ inputs.include_slow && '--include-slow' || '' }}
+
+      - name: Show scoreboard
+        run: cat bench/results/*.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload results
+        uses: actions/upload-artifact@v4
+        with:
+          name: bench-results
+          path: bench/results/

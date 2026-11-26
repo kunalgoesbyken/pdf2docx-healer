@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.3.0
+
+### Added
+- `--mode editable` (`HealerConfig(mode="editable")`): builds a reflowing Word document straight from the PDF, with real headings, real Word lists (bullets, numbers, letters, roman, dotted outlines such as 1.2.3), tables, pictures, two-column reading order, right-to-left paragraphs, and running headers, footers and page numbers moved into the Word header and footer. Work on large or hostile PDFs is capped by `FlowLimits` (images, image size and pixels, drawings, table time).
+- Headings: Word heading styles from the PDF outline (bookmarks), with font-size detection when there is no outline.
+- Internal links: citations, footnote marks and cross references become Word bookmarks and links.
+- Email addresses become `mailto:` links.
+- Page recovery: a page pdf2docx fails on is rebuilt from its text and images instead of being dropped.
+- A reproducible benchmark (`bench/`) against pdf2docx, pdf2docx-plus and LibreOffice on 12 public PDFs plus a generated one.
+- `--version`, Windows and macOS CI, Python 3.13 support, and a CI job on the oldest allowed dependencies.
+
+### Fixed
+- Lists: a page is never dropped, numbering restarts where the PDF restarts, lettered and roman formats are kept, nesting follows the indent, headings and prose that start with a number are left alone, a list no longer continues across a table, and splitting a paragraph no longer duplicates its section break.
+- Fidelity mode keeps the spaces between words, drops tables that are only page layout, and no longer turns a rotated margin label into a table around the whole page.
+- Link safety: every link target that is not `http`, `https`, `mailto` or `ftp` (for example `file:`, `javascript:` or a UNC path) is turned into plain text. This check always runs, and if it fails the conversion fails instead of keeping an unchecked file. Links pdf2docx nests inside runs, which Word's schema does not allow, are lifted to paragraph level.
+- A quadratic scan over images made large documents slow.
+
+### Changed
+- Requires Python 3.10 or newer, `PyMuPDF>=1.27.1`, `python-docx>=1.1.0` and `lxml>=4.9`. Older PyMuPDF groups figures differently, python-docx 1.0 cannot be imported by this package, and 0.8 does not read link text.
+- Built and published with uv; each release is also attached to its GitHub release.
+
 ## 0.2.0
 
 ### Fixed
