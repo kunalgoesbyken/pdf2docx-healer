@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.1
+
+### Changed
+- New README with a logo, a benchmark chart and a feature comparison; images use absolute links so they also show on PyPI.
+- `python -m bench.chart <results.json> <out.svg>` draws the benchmark chart from a results file.
+
 ## 0.3.0
 
 ### Added
