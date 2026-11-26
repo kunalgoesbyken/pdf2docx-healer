@@ -220,8 +220,20 @@ class RunningLine:
 
 
 @dataclass
-class Running:
-    """Repeating header and footer lines removed from the page bodies."""
+class RunningImage:
+    """A picture that repeats at the same place across pages."""
 
-    header: List[RunningLine] = field(default_factory=list)
-    footer: List[RunningLine] = field(default_factory=list)
+    image: ImageItem
+    align: str
+    first_page: bool
+
+
+RunningItem = Union[RunningLine, RunningImage]
+
+
+@dataclass
+class Running:
+    """Repeating header and footer lines and pictures removed from the page bodies."""
+
+    header: List[RunningItem] = field(default_factory=list)
+    footer: List[RunningItem] = field(default_factory=list)

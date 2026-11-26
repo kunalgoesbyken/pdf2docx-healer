@@ -15,6 +15,8 @@ from .flow_model import (
     Para,
     Rect,
     Running,
+    RunningImage,
+    RunningItem,
     RunningLine,
     Span,
     TableItem,
@@ -57,7 +59,10 @@ def _normalise(text: str) -> str:
 
 
 def drop_running(pages: List[PageData]) -> Running:
-    """Remove lines and images that repeat at the same position on many pages."""
+    """Move lines and pictures repeating at one position on many pages to the header or footer.
+
+    A repeated picture lying under body text is a watermark and is dropped instead.
+    """
     text_pages = [p for p in pages if p.units]
     running = Running()
     if len(text_pages) < 2:
@@ -74,18 +79,32 @@ def drop_running(pages: List[PageData]) -> Running:
                 key = _line_key(page, line)
                 if key is not None:
                     lines.setdefault(key, {}).setdefault(page.number, line)
-    candidates = {key: where for key, where in lines.items() if len(where) >= needed}
+    first = text_pages[0].number
+    placed: List[Tuple[Tuple[float, float], bool, RunningItem]] = []
     repeated = set()
-    for key, where in sorted(candidates.items(), key=lambda kw: _reading_key(_first_line(kw[1]))):
+    for key, where in lines.items():
+        if len(where) < needed:
+            continue
         line = _first_line(where)
         page = by_number[line.page]
-        entry = _running_line(where, page.width, text_pages[0].number)
+        entry = _running_line(where, page.width, first)
         if entry is None:
             continue
         repeated.add(key)
-        top = line.bbox[3] <= _BAND * page.height
-        (running.header if top else running.footer).append(entry)
+        placed.append((_reading_key(line.bbox), line.bbox[3] <= _BAND * page.height, entry))
     gone = {key for key, where in images.items() if len(where) >= needed}
+    for key in gone:
+        page = by_number[min(images[key])]
+        img = next(img for img in page.images if img.key == key)
+        body = (line.bbox for unit in page.units for line in unit.lines
+                if _line_key(page, line) not in repeated)
+        if any(_intersects(img.bbox, box) for box in body):
+            continue
+        middle = (img.bbox[1] + img.bbox[3]) / 2
+        picture = RunningImage(img, _alignment(img.bbox, page.width), first in images[key])
+        placed.append((_reading_key(img.bbox), middle <= page.height / 2, picture))
+    for _, top, item in sorted(placed, key=lambda entry: entry[0]):
+        (running.header if top else running.footer).append(item)
     for page in text_pages:
         for unit in page.units:
             unit.lines = [line for line in unit.lines if _line_key(page, line) not in repeated]
@@ -94,12 +113,23 @@ def drop_running(pages: List[PageData]) -> Running:
     return running
 
 
-def _reading_key(line: Line) -> Tuple[float, float]:
-    return (line.bbox[1], line.bbox[0])
+def _reading_key(bbox: Rect) -> Tuple[float, float]:
+    return (bbox[1], bbox[0])
 
 
 def _first_line(where: Dict[int, Line]) -> Line:
     return where[min(where)]
+
+
+def _intersects(a: Rect, b: Rect) -> bool:
+    return min(a[2], b[2]) > max(a[0], b[0]) and min(a[3], b[3]) > max(a[1], b[1])
+
+
+def _alignment(bbox: Rect, page_width: float) -> str:
+    middle = (bbox[0] + bbox[2]) / 2
+    if abs(middle - page_width / 2) < _ALIGN_CENTER * page_width:
+        return "center"
+    return "right" if bbox[0] > _ALIGN_RIGHT * page_width else "left"
 
 
 def _running_line(
@@ -109,13 +139,9 @@ def _running_line(
     parts = _page_parts(where)
     if parts is None:
         return None
-    middle = (line.bbox[0] + line.bbox[2]) / 2
-    if abs(middle - page_width / 2) < _ALIGN_CENTER * page_width:
-        align = "center"
-    else:
-        align = "right" if line.bbox[0] > _ALIGN_RIGHT * page_width else "left"
     return RunningLine(
-        parts, line.size, line.bold, align, strong_direction(line.text) == "rtl", first in where
+        parts, line.size, line.bold, _alignment(line.bbox, page_width),
+        strong_direction(line.text) == "rtl", first in where,
     )
 
 

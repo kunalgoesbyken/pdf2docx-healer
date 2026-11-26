@@ -12,11 +12,21 @@ from docx.image.image import Image as DocxImage
 from docx.opc.constants import RELATIONSHIP_TYPE as RT
 from docx.oxml import OxmlElement, parse_xml
 from docx.oxml.ns import nsdecls, qn
-from docx.shared import Pt, RGBColor
+from docx.shared import Emu, Pt, RGBColor
 from docx.text.paragraph import Paragraph
 
 from .flow_lists import LevelDef, ListInstance, level_indents
-from .flow_model import ImageItem, LinkKey, Para, Running, RunningLine, Span, TableItem
+from .flow_model import (
+    ImageItem,
+    LinkKey,
+    Para,
+    Running,
+    RunningImage,
+    RunningItem,
+    RunningLine,
+    Span,
+    TableItem,
+)
 from .flow_text import is_rtl_char
 from .font_mapper import normalize_font_name
 from .log import logger
@@ -259,21 +269,27 @@ class Emitter:
             self.paragraph(paragraph, para)
 
     def image(self, image: ImageItem, center: bool) -> None:
-        data = _usable_image(image)
-        if data is None:
-            return
-        width = min(image.width, self.text_width)
         paragraph = self.doc.add_paragraph()
-        try:
-            paragraph.add_run().add_picture(io.BytesIO(data), width=Pt(width))
-        except Exception as exc:
-            logger.warning("Could not embed an image: %s", exc)
+        if not _add_picture(paragraph, image, self.text_width):
             body = paragraph._p.getparent()
             if body is not None:
                 body.remove(paragraph._p)
             return
         if center:
             paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+
+
+def _add_picture(paragraph: Paragraph, image: ImageItem, text_width: float) -> bool:
+    """Put the image into the paragraph at most text_width wide; False if it cannot be embedded."""
+    data = _usable_image(image)
+    if data is None:
+        return False
+    try:
+        paragraph.add_run().add_picture(io.BytesIO(data), width=Pt(min(image.width, text_width)))
+    except Exception as exc:
+        logger.warning("Could not embed an image: %s", exc)
+        return False
+    return True
 
 
 def _usable_image(image: ImageItem) -> Optional[bytes]:
@@ -313,26 +329,31 @@ _ALIGNMENTS = {
 
 
 def write_running(section: Any, running: Running, body: float) -> None:
-    """Write the repeating lines into the section's Word header and footer parts."""
-    for part, lines in ((section.header, running.header), (section.footer, running.footer)):
-        _fill_part(part, lines, body)
-        first = [line for line in lines if line.first_page]
-        if len(first) != len(lines):
+    """Write the repeating lines and pictures into the section's Word header and footer parts."""
+    width = Emu(section.page_width - section.left_margin - section.right_margin).pt
+    for part, items in ((section.header, running.header), (section.footer, running.footer)):
+        _fill_part(part, items, body, width)
+        first = [item for item in items if item.first_page]
+        if len(first) != len(items):
             section.different_first_page_header_footer = True
     first_header = section.first_page_header
     first_footer = section.first_page_footer
     if section.different_first_page_header_footer:
-        _fill_part(first_header, [x for x in running.header if x.first_page], body)
-        _fill_part(first_footer, [x for x in running.footer if x.first_page], body)
+        _fill_part(first_header, [x for x in running.header if x.first_page], body, width)
+        _fill_part(first_footer, [x for x in running.footer if x.first_page], body, width)
 
 
-def _fill_part(part: Any, lines: List[RunningLine], body: float) -> None:
-    if not lines:
+def _fill_part(part: Any, items: List[RunningItem], body: float, width: float) -> None:
+    if not items:
         return
     part.is_linked_to_previous = False
-    for index, line in enumerate(lines):
+    for index, item in enumerate(items):
         paragraph = part.paragraphs[0] if index == 0 else part.add_paragraph()
-        paragraph.alignment = _ALIGNMENTS[line.align]
+        paragraph.alignment = _ALIGNMENTS[item.align]
+        if isinstance(item, RunningImage):
+            _add_picture(paragraph, item.image, width)
+            continue
+        line = item
         if line.rtl:
             _set_bidi(paragraph._p.get_or_add_pPr())
         for piece in line.parts:

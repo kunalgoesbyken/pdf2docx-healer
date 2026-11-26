@@ -171,15 +171,20 @@ def related_roots(document: Any) -> Dict[str, Any]:
     return roots
 
 
-def extra_words(document: Any) -> List[str]:
-    """Tokenize header, footer, footnote and endnote parts."""
+def extra_parts(document: Any) -> Tuple[List[str], int]:
+    """Tokenize header, footer, footnote and endnote parts and count their pictures."""
     words: List[str] = []
+    images = 0
     for part in document.part.package.iter_parts():
         if not str(part.content_type).endswith(EXTRA_PART_SUFFIXES):
             continue
         root = part_root(part)
         if root is None:
             continue
+        images += sum(
+            1 for node in root.iter(f"{A}blip", f"{V}imagedata")
+            if not any(True for _ in node.iterancestors(f"{MC}Fallback"))
+        )
         for paragraph in root.iter(f"{W}p"):
             text = "".join(
                 node.text or ""
@@ -187,7 +192,7 @@ def extra_words(document: Any) -> List[str]:
                 if not any(True for _ in node.iterancestors(f"{MC}Fallback"))
             )
             words.extend(tokenize(text, keep_split=True))
-    return join_split(words)
+    return join_split(words), images
 
 
 class Walker:
@@ -381,7 +386,9 @@ def docx_facts(path: Any) -> DocxFacts:
             raise InvalidDocx("not a zip package")
         document = Document(str(path))
         facts = Walker(document, related_roots(document)).run()
-        facts.words = facts.words + extra_words(document)
+        words, images = extra_parts(document)
+        facts.words = facts.words + words
+        facts.images += images
     except InvalidDocx:
         raise
     except Exception as exc:

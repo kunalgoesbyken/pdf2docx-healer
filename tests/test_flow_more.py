@@ -90,7 +90,7 @@ def test_plain_header_row_is_not_marked_and_a_lone_box_is_not_a_table(tmp_path):
     assert "Boxed note text inside a frame." in texts(out)
 
 
-def test_full_page_background_and_repeated_logo_images_are_dropped(tmp_path):
+def test_full_page_background_and_repeated_logo_images_stay_out_of_the_body(tmp_path):
     def build(doc):
         for number in range(3):
             page = new_page(doc)

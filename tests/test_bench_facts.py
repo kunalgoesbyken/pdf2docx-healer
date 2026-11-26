@@ -187,6 +187,16 @@ def test_images_counts_drawings_but_not_fallback_copies(tmp_path):
     assert docx_facts(build_docx(tmp_path / "a.docx", body)).images == 2
 
 
+def test_header_pictures_count_once_without_fallback_copies(tmp_path):
+    header = (
+        '<w:p><w:r><mc:AlternateContent><mc:Choice Requires="wps"><w:drawing><a:blip r:embed="x"/>'
+        '</w:drawing></mc:Choice><mc:Fallback><w:pict><v:imagedata r:id="y"/></w:pict></mc:Fallback>'
+        "</mc:AlternateContent></w:r></w:p>"
+    )
+    body = '<w:p><w:r><w:drawing><a:blip r:embed="z"/></w:drawing></w:r></w:p>'
+    assert docx_facts(build_docx(tmp_path / "a.docx", body, header=header)).images == 2
+
+
 def test_30k_paragraphs_and_deep_style_chain_stay_linear(tmp_path):
     chain = "".join(style(f"S{i}", f"S{i}", based_on=f"S{i + 1}") for i in range(1000))
     body = "".join(para("w", style="S0") for _ in range(30_000))
