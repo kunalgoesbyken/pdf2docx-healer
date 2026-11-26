@@ -1,6 +1,6 @@
 # Benchmark
 
-A reproducible comparison of plain `pdf2docx` and `pdf2docx-healer` on a fixed set of public PDFs. Every number comes from the PDF itself (PyMuPDF) and from the produced DOCX (XML read directly), never from log text.
+A reproducible comparison of `pdf2docx-healer` (both modes) with plain `pdf2docx`, `pdf2docx-plus` and LibreOffice on a fixed set of public PDFs. Every number comes from the PDF itself (PyMuPDF) and from the produced DOCX (XML read directly), never from log text.
 
 ## Run it
 
@@ -74,7 +74,7 @@ All ratios are 0 to 1, higher is better. A metric the document does not define (
 | Number shown | Synthetic only. The visible label is rendered from `numbering.xml` following ECMA-376 (`w:start`, `w:startOverride`, `w:numFmt`, `w:lvlText`, `w:lvlRestart`, `w:isLgl`; paragraphs of different `w:num` on one abstract list continue each other unless `startOverride` restarts them) and must equal the PDF label exactly (`3.`, `iii.`, `c)`, `1.1`). A label typed into the text counts as visible but not as a real list; a numbered paragraph that also has the label typed in is a doubled label and does not count. |
 | Ext links | Distinct external URIs of the PDF that appear as hyperlinks (relationship, `HYPERLINK` field) in the DOCX. |
 | Int links | Output hyperlinks whose `w:anchor` names an existing bookmark (a `bookmarkStart` with a matching `bookmarkEnd`), over the PDF's internal links, capped at 1. Dangling anchors are listed per row. |
-| Tables, Images | min(count)/max(count) of DOCX versus PDF, 1 when both are zero. Phantom layout tables lower the score. `find_tables` finds ruled tables, so the PDF count is a reference signal, not an oracle. |
+| Tables, Images | min(count)/max(count) of DOCX versus PDF, 1 when both are zero. Phantom layout tables lower the score. Pictures in headers and footers count once, like their text. `find_tables` finds ruled tables, so the PDF count is a reference signal, not an oracle. |
 | Seconds | Wall time of the conversion in the child process. |
 
 Visible numbers count rendered labels as words, so turning `3. text` into a real list is not scored as lost text, and a wrong or doubled label costs precision.
@@ -92,81 +92,80 @@ An output that python-docx cannot open, or that repeats a `w:bookmarkStart` id, 
 
 ## Results
 
-Run 2026-11-25: pdf2docx-healer at commit `8e4bbf8`, benchmark at commit `3033935+dirty` (python 3.12.4, pymupdf 2.1, pdf2docx 0.5.13, python-docx 1.2.0, lxml 6.1.3, pdf2docx-healer 0.2.0, platform Windows-11-10.0.26300-SP0, pdf2docx-plus 0.6.10, libreoffice build 861effc5289d).
+Run 2026-11-26: pdf2docx-healer at commit `554dd9f+dirty`, benchmark at commit `554dd9f+dirty` (python 3.12.4, pymupdf 2.1, pdf2docx 0.5.13, python-docx 1.2.0, lxml 6.1.3, pdf2docx-healer 0.3.0, pdf2docx-plus 0.6.10, libreoffice build 861effc5289d, platform Windows-11-10.0.26300-SP0).
 
 | Tool | Ok | Failed | Word recall | Word precision | Recall any order | Heading recall | Heading level | List real | List level | Number shown | Ext links | Int links | Tables | Images | Pages lost | Median s |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| pdf2docx | 13 | 0 | 0.849 | 0.869 | 0.959 | 0.00 | 0.00 | 0.00 | 0.00 | 1.00 | 0.99 | 0.00 | 0.33 | 0.66 | 0/230 | 12.5 |
-| healer-fidelity | 13 | 0 | 0.849 | 0.870 | 0.959 | 0.52 | 0.52 | 0.76 | 0.68 | 1.00 | 0.99 | 0.95 | 0.33 | 0.66 | 0/230 | 7.3 |
-| healer-editable | 13 | 0 | 0.910 | 0.922 | 0.984 | 0.59 | 0.59 | 0.68 | 0.68 | 0.68 | 0.99 | 0.86 | 0.80 | 0.63 | 0/230 | 5.2 |
-| pdf2docx-plus | 13 | 0 | 0.855 | 0.861 | 0.987 | 0.00 | 0.00 | 0.68 | 0.52 | 0.88 | 0.99 | 0.00 | 0.64 | 0.66 | 0/230 | 8.7 |
-| libreoffice | 13 | 0 | 0.700 | 0.691 | 0.934 | 0.00 | 0.00 | 0.00 | 0.00 | 0.00 | 0.00 | 0.00 | 0.23 | 0.93 | 36/230 | 12.6 |
+| pdf2docx | 13 | 0 | 0.848 | 0.869 | 0.958 | 0.00 | 0.00 | 0.00 | 0.00 | 1.00 | 0.99 | 0.00 | 0.33 | 0.66 | 0/230 | 6.7 |
+| healer-fidelity | 13 | 0 | 0.879 | 0.881 | 0.992 | 0.70 | 0.70 | 0.76 | 0.68 | 1.00 | 0.99 | 0.95 | 0.50 | 0.66 | 0/230 | 5.9 |
+| healer-editable | 13 | 0 | 0.941 | 0.950 | 0.991 | 0.79 | 0.79 | 1.00 | 1.00 | 1.00 | 0.99 | 0.85 | 0.88 | 0.84 | 0/230 | 6.3 |
+| pdf2docx-plus | 13 | 0 | 0.855 | 0.861 | 0.986 | 0.00 | 0.00 | 0.68 | 0.52 | 0.88 | 0.99 | 0.00 | 0.64 | 0.66 | 0/230 | 7.3 |
+| libreoffice | 13 | 0 | 0.698 | 0.688 | 0.929 | 0.00 | 0.00 | 0.00 | 0.00 | 0.00 | 0.00 | 0.00 | 0.23 | 0.93 | 36/230 | 11.0 |
 
 | Document | Converter | Status | Recall | Precision | Pages lost | List paras | Ext links | Int links | Tables d/p | Images d/p | Seconds |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| llama-two-column | pdf2docx | ok | 0.619 | 0.748 | 0/27 | 0 | 1.00 | - | 82/17 | 7/0 | 80.0 |
-| llama-two-column | healer-fidelity | ok | 0.619 | 0.748 | 0/27 | 0 | 1.00 | - | 82/17 | 7/0 | 82.1 |
-| llama-two-column | healer-editable | ok | 0.956 | 0.975 | 0/27 | 7 | 1.00 | - | 14/17 | 5/0 | 19.0 |
-| llama-two-column | pdf2docx-plus | ok | 0.780 | 0.780 | 0/27 | 5 | 1.00 | - | 4/17 | 7/0 | 59.2 |
-| llama-two-column | libreoffice | ok | 0.710 | 0.709 | 0/27 | 0 | 0.00 | - | 0/17 | 0/0 | 33.9 |
-| irs-pub15-lists | pdf2docx | ok | 0.953 | 0.955 | 0/57 | 0 | 1.00 | - | 87/16 | 43/2 | 61.1 |
-| irs-pub15-lists | healer-fidelity | ok | 0.953 | 0.955 | 0/57 | 8 | 0.99 | - | 87/16 | 43/2 | 57.4 |
-| irs-pub15-lists | healer-editable | ok | 0.926 | 0.951 | 0/57 | 279 | 1.00 | - | 8/16 | 0/2 | 28.5 |
-| irs-pub15-lists | pdf2docx-plus | ok | 0.950 | 0.949 | 0/57 | 309 | 0.99 | - | 33/16 | 31/2 | 98.1 |
-| irs-pub15-lists | libreoffice | ok | 0.555 | 0.532 | 0/57 | 0 | 0.00 | - | 0/16 | 2/2 | 84.7 |
-| irs-fw9-form | pdf2docx | ok | 0.964 | 0.977 | 0/6 | 0 | - | - | 29/5 | 0/0 | 12.5 |
-| irs-fw9-form | healer-fidelity | ok | 0.964 | 0.977 | 0/6 | 41 | - | - | 29/5 | 0/0 | 5.9 |
-| irs-fw9-form | healer-editable | ok | 0.966 | 0.972 | 0/6 | 42 | - | - | 3/5 | 0/0 | 5.0 |
-| irs-fw9-form | pdf2docx-plus | ok | 0.979 | 0.985 | 0/6 | 56 | - | - | 19/5 | 0/0 | 8.7 |
-| irs-fw9-form | libreoffice | ok | 0.618 | 0.618 | 0/6 | 0 | - | - | 0/5 | 0/0 | 10.0 |
-| slides-hack-for-heritage | pdf2docx | ok | 0.819 | 0.819 | 0/7 | 0 | 1.00 | - | 17/0 | 13/17 | 4.6 |
-| slides-hack-for-heritage | healer-fidelity | ok | 0.819 | 0.819 | 0/7 | 0 | 1.00 | - | 17/0 | 13/17 | 4.4 |
-| slides-hack-for-heritage | healer-editable | ok | 0.867 | 0.867 | 0/7 | 4 | 1.00 | - | 0/0 | 11/17 | 2.9 |
-| slides-hack-for-heritage | pdf2docx-plus | ok | 0.724 | 0.724 | 0/7 | 2 | 1.00 | - | 0/0 | 13/17 | 4.2 |
-| slides-hack-for-heritage | libreoffice | ok | 0.814 | 0.814 | 0/7 | 0 | 0.00 | - | 0/0 | 17/17 | 7.8 |
-| mixtral-outline | pdf2docx | ok | 0.862 | 0.934 | 0/13 | 0 | 1.00 | - | 27/6 | 11/8 | 567.2 |
-| mixtral-outline | healer-fidelity | ok | 0.862 | 0.934 | 0/13 | 0 | 1.00 | - | 27/6 | 11/8 | 226.9 |
-| mixtral-outline | healer-editable | ok | 0.933 | 0.938 | 0/13 | 6 | 1.00 | - | 5/6 | 22/8 | 7.7 |
-| mixtral-outline | pdf2docx-plus | ok | 0.952 | 0.955 | 0/13 | 41 | 1.00 | - | 12/6 | 11/8 | 243.3 |
-| mixtral-outline | libreoffice | ok | 0.947 | 0.944 | 0/13 | 0 | 0.00 | - | 0/6 | 8/8 | 17.2 |
-| nist-csf2-links | pdf2docx | ok | 0.948 | 0.959 | 0/32 | 0 | 0.97 | 0.00 | 6/3 | 12/13 | 10.1 |
-| nist-csf2-links | healer-fidelity | ok | 0.948 | 0.959 | 0/32 | 0 | 0.97 | 0.89 | 6/3 | 12/13 | 9.6 |
-| nist-csf2-links | healer-editable | ok | 0.939 | 0.983 | 0/32 | 69 | 0.97 | 0.72 | 1/3 | 10/13 | 6.0 |
-| nist-csf2-links | pdf2docx-plus | ok | 0.938 | 0.942 | 0/32 | 43 | 0.97 | 0.00 | 4/3 | 12/13 | 11.4 |
-| nist-csf2-links | libreoffice | ok | 0.952 | 0.947 | 0/32 | 0 | 0.00 | 0.00 | 0/3 | 13/13 | 12.6 |
-| zh-us-constitution | pdf2docx | ok | 1.000 | 1.000 | 0/29 | 0 | - | - | 29/8 | 0/0 | 22.0 |
-| zh-us-constitution | healer-fidelity | ok | 1.000 | 1.000 | 0/29 | 0 | - | - | 29/8 | 0/0 | 9.3 |
-| zh-us-constitution | healer-editable | ok | 0.958 | 0.958 | 0/29 | 0 | - | - | 6/8 | 0/0 | 9.0 |
-| zh-us-constitution | pdf2docx-plus | ok | 0.993 | 0.990 | 0/29 | 2 | - | - | 1/8 | 0/0 | 16.3 |
-| zh-us-constitution | libreoffice | ok | 0.627 | 0.627 | 0/29 | 0 | - | - | 0/8 | 0/0 | 14.1 |
-| ar-wikipedia-education | pdf2docx | ok | 0.478 | 0.483 | 0/2 | 0 | - | - | 7/0 | 5/45 | 19.7 |
-| ar-wikipedia-education | healer-fidelity | ok | 0.478 | 0.483 | 0/2 | 0 | - | - | 7/0 | 5/45 | 7.3 |
-| ar-wikipedia-education | healer-editable | ok | 0.463 | 0.470 | 0/2 | 0 | - | - | 0/0 | 16/45 | 5.2 |
-| ar-wikipedia-education | pdf2docx-plus | ok | 0.477 | 0.481 | 0/2 | 0 | - | - | 0/0 | 5/45 | 7.0 |
-| ar-wikipedia-education | libreoffice | ok | 0.382 | 0.359 | 0/2 | 0 | - | - | 0/0 | 6/45 | 41.9 |
-| he-wikimedia-article | pdf2docx | ok | 0.597 | 0.614 | 0/8 | 0 | - | - | 9/3 | 1/0 | 7.9 |
-| he-wikimedia-article | healer-fidelity | ok | 0.597 | 0.614 | 0/8 | 0 | - | - | 9/3 | 1/0 | 5.2 |
-| he-wikimedia-article | healer-editable | ok | 0.961 | 0.965 | 0/8 | 0 | - | - | 3/3 | 0/0 | 3.0 |
-| he-wikimedia-article | pdf2docx-plus | ok | 0.597 | 0.613 | 0/8 | 0 | - | - | 3/3 | 1/0 | 4.8 |
-| he-wikimedia-article | libreoffice | ok | 0.584 | 0.578 | 0/8 | 0 | - | - | 0/3 | 0/0 | 8.6 |
-| hi-mizoram-syllabus | pdf2docx | ok | 0.983 | 0.985 | 0/36 | 0 | - | - | 137/3 | 0/0 | 114.3 |
-| hi-mizoram-syllabus | healer-fidelity | ok | 0.984 | 0.986 | 0/36 | 44 | - | - | 137/3 | 0/0 | 37.6 |
-| hi-mizoram-syllabus | healer-editable | ok | 0.989 | 1.000 | 0/36 | 287 | - | - | 2/3 | 0/0 | 7.0 |
-| hi-mizoram-syllabus | pdf2docx-plus | ok | 0.947 | 0.961 | 0/36 | 499 | - | - | 3/3 | 0/0 | 25.0 |
-| hi-mizoram-syllabus | libreoffice | ok | 0.250 | 0.253 | 36/36 | 0 | - | - | 0/3 | 0/0 | 29.3 |
-| us-patent-174465-scan | pdf2docx | ok | - | - | 0/0 | 0 | - | - | 0/0 | 6/6 | 4.9 |
-| us-patent-174465-scan | healer-fidelity | ok | - | - | 0/0 | 0 | - | - | 0/0 | 6/6 | 2.1 |
-| us-patent-174465-scan | healer-editable | ok | - | - | 0/0 | 0 | - | - | 0/0 | 0/6 | 1.1 |
-| us-patent-174465-scan | pdf2docx-plus | ok | - | - | 0/0 | 0 | - | - | 0/0 | 6/6 | 3.0 |
-| us-patent-174465-scan | libreoffice | ok | - | - | 0/0 | 0 | - | - | 0/0 | 6/6 | 7.5 |
-| wmil-financial-statements | pdf2docx | ok | 0.958 | 0.959 | 0/10 | 0 | - | - | 14/6 | 0/0 | 5.5 |
-| wmil-financial-statements | healer-fidelity | ok | 0.958 | 0.959 | 0/10 | 15 | - | - | 14/6 | 0/0 | 2.2 |
-| wmil-financial-statements | healer-editable | ok | 0.959 | 0.981 | 0/10 | 11 | - | - | 5/6 | 0/0 | 3.1 |
-| wmil-financial-statements | pdf2docx-plus | ok | 0.946 | 0.971 | 0/10 | 19 | - | - | 0/6 | 0/0 | 1.9 |
-| wmil-financial-statements | libreoffice | ok | 0.963 | 0.910 | 0/10 | 0 | - | - | 0/6 | 0/0 | 7.6 |
-| synthetic | pdf2docx | ok | 1.000 | 1.000 | 0/3 | 0 | 1.00 | 0.00 | 1/1 | 1/1 | 1.6 |
-| synthetic | healer-fidelity | ok | 1.000 | 1.000 | 0/3 | 19 | 1.00 | 1.00 | 1/1 | 1/1 | 0.8 |
-| synthetic | healer-editable | ok | 1.000 | 1.000 | 0/3 | 17 | 1.00 | 1.00 | 1/1 | 1/1 | 1.3 |
-| synthetic | pdf2docx-plus | ok | 0.983 | 0.983 | 0/3 | 17 | 1.00 | 0.00 | 1/1 | 1/1 | 0.9 |
-| synthetic | libreoffice | ok | 1.000 | 1.000 | 0/3 | 0 | 0.00 | 0.00 | 0/1 | 1/1 | 5.4 |
-
+| llama-two-column | pdf2docx | ok | 0.616 | 0.748 | 0/27 | 0 | 1.00 | - | 82/17 | 7/0 | 90.3 |
+| llama-two-column | healer-fidelity | ok | 0.830 | 0.829 | 0/27 | 2 | 1.00 | - | 41/17 | 7/0 | 31.0 |
+| llama-two-column | healer-editable | ok | 0.986 | 0.994 | 0/27 | 7 | 1.00 | - | 16/17 | 2/0 | 18.1 |
+| llama-two-column | pdf2docx-plus | ok | 0.780 | 0.779 | 0/27 | 5 | 1.00 | - | 4/17 | 7/0 | 24.7 |
+| llama-two-column | libreoffice | ok | 0.699 | 0.697 | 0/27 | 0 | 0.00 | - | 0/17 | 0/0 | 17.4 |
+| irs-pub15-lists | pdf2docx | ok | 0.952 | 0.954 | 0/57 | 0 | 0.99 | - | 87/16 | 43/2 | 52.2 |
+| irs-pub15-lists | healer-fidelity | ok | 0.955 | 0.955 | 0/57 | 244 | 0.99 | - | 40/16 | 43/2 | 51.2 |
+| irs-pub15-lists | healer-editable | ok | 0.965 | 0.971 | 0/57 | 279 | 1.00 | - | 8/16 | 2/2 | 29.2 |
+| irs-pub15-lists | pdf2docx-plus | ok | 0.949 | 0.948 | 0/57 | 309 | 0.99 | - | 33/16 | 31/2 | 57.9 |
+| irs-pub15-lists | libreoffice | ok | 0.537 | 0.514 | 0/57 | 0 | 0.00 | - | 0/16 | 2/2 | 56.3 |
+| irs-fw9-form | pdf2docx | ok | 0.965 | 0.977 | 0/6 | 0 | - | - | 29/5 | 0/0 | 5.5 |
+| irs-fw9-form | healer-fidelity | ok | 0.990 | 0.990 | 0/6 | 41 | - | - | 21/5 | 0/0 | 5.2 |
+| irs-fw9-form | healer-editable | ok | 0.966 | 0.971 | 0/6 | 42 | - | - | 3/5 | 0/0 | 4.5 |
+| irs-fw9-form | pdf2docx-plus | ok | 0.979 | 0.985 | 0/6 | 56 | - | - | 19/5 | 0/0 | 5.4 |
+| irs-fw9-form | libreoffice | ok | 0.618 | 0.618 | 0/6 | 0 | - | - | 0/5 | 0/0 | 7.4 |
+| slides-hack-for-heritage | pdf2docx | ok | 0.818 | 0.818 | 0/7 | 0 | 1.00 | - | 17/0 | 13/17 | 2.7 |
+| slides-hack-for-heritage | healer-fidelity | ok | 0.818 | 0.818 | 0/7 | 0 | 1.00 | - | 17/0 | 13/17 | 4.2 |
+| slides-hack-for-heritage | healer-editable | ok | 0.866 | 0.866 | 0/7 | 4 | 1.00 | - | 0/0 | 12/17 | 2.7 |
+| slides-hack-for-heritage | pdf2docx-plus | ok | 0.722 | 0.722 | 0/7 | 2 | 1.00 | - | 0/0 | 13/17 | 3.4 |
+| slides-hack-for-heritage | libreoffice | ok | 0.813 | 0.813 | 0/7 | 0 | 0.00 | - | 0/0 | 17/17 | 5.9 |
+| mixtral-outline | pdf2docx | ok | 0.862 | 0.936 | 0/13 | 0 | 1.00 | - | 27/6 | 11/8 | 210.1 |
+| mixtral-outline | healer-fidelity | ok | 0.950 | 0.950 | 0/13 | 6 | 1.00 | - | 19/6 | 11/8 | 26.4 |
+| mixtral-outline | healer-editable | ok | 0.928 | 0.937 | 0/13 | 6 | 1.00 | - | 6/6 | 11/8 | 7.1 |
+| mixtral-outline | pdf2docx-plus | ok | 0.951 | 0.954 | 0/13 | 41 | 1.00 | - | 12/6 | 11/8 | 252.6 |
+| mixtral-outline | libreoffice | ok | 0.947 | 0.943 | 0/13 | 0 | 0.00 | - | 0/6 | 8/8 | 14.2 |
+| nist-csf2-links | pdf2docx | ok | 0.948 | 0.959 | 0/32 | 0 | 0.97 | 0.00 | 6/3 | 12/13 | 6.7 |
+| nist-csf2-links | healer-fidelity | ok | 0.970 | 0.970 | 0/32 | 63 | 0.97 | 0.89 | 6/3 | 12/13 | 9.1 |
+| nist-csf2-links | healer-editable | ok | 0.940 | 0.979 | 0/32 | 69 | 0.97 | 0.70 | 3/3 | 13/13 | 7.3 |
+| nist-csf2-links | pdf2docx-plus | ok | 0.938 | 0.941 | 0/32 | 43 | 0.97 | 0.00 | 4/3 | 12/13 | 10.8 |
+| nist-csf2-links | libreoffice | ok | 0.952 | 0.948 | 0/32 | 0 | 0.00 | 0.00 | 0/3 | 13/13 | 11.0 |
+| zh-us-constitution | pdf2docx | ok | 1.000 | 1.000 | 0/29 | 0 | - | - | 29/8 | 0/0 | 7.9 |
+| zh-us-constitution | healer-fidelity | ok | 1.000 | 1.000 | 0/29 | 0 | - | - | 29/8 | 0/0 | 11.1 |
+| zh-us-constitution | healer-editable | ok | 0.958 | 0.958 | 0/29 | 0 | - | - | 6/8 | 0/0 | 14.1 |
+| zh-us-constitution | pdf2docx-plus | ok | 0.993 | 0.990 | 0/29 | 2 | - | - | 1/8 | 0/0 | 24.7 |
+| zh-us-constitution | libreoffice | ok | 0.628 | 0.628 | 0/29 | 0 | - | - | 0/8 | 0/0 | 14.3 |
+| ar-wikipedia-education | pdf2docx | ok | 0.479 | 0.484 | 0/2 | 0 | - | - | 7/0 | 5/45 | 7.6 |
+| ar-wikipedia-education | healer-fidelity | ok | 0.479 | 0.484 | 0/2 | 0 | - | - | 7/0 | 5/45 | 5.9 |
+| ar-wikipedia-education | healer-editable | ok | 0.768 | 0.780 | 0/2 | 0 | - | - | 0/0 | 24/45 | 6.3 |
+| ar-wikipedia-education | pdf2docx-plus | ok | 0.478 | 0.482 | 0/2 | 0 | - | - | 0/0 | 5/45 | 7.3 |
+| ar-wikipedia-education | libreoffice | ok | 0.381 | 0.358 | 0/2 | 0 | - | - | 0/0 | 6/45 | 47.5 |
+| he-wikimedia-article | pdf2docx | ok | 0.596 | 0.613 | 0/8 | 0 | - | - | 9/3 | 1/0 | 4.8 |
+| he-wikimedia-article | healer-fidelity | ok | 0.596 | 0.613 | 0/8 | 0 | - | - | 3/3 | 1/0 | 5.8 |
+| he-wikimedia-article | healer-editable | ok | 0.964 | 0.966 | 0/8 | 0 | - | - | 3/3 | 0/0 | 2.8 |
+| he-wikimedia-article | pdf2docx-plus | ok | 0.596 | 0.613 | 0/8 | 0 | - | - | 3/3 | 1/0 | 4.9 |
+| he-wikimedia-article | libreoffice | ok | 0.584 | 0.579 | 0/8 | 0 | - | - | 0/3 | 0/0 | 9.0 |
+| hi-mizoram-syllabus | pdf2docx | ok | 0.983 | 0.985 | 0/36 | 0 | - | - | 137/3 | 0/0 | 39.6 |
+| hi-mizoram-syllabus | healer-fidelity | ok | 0.987 | 0.991 | 0/36 | 473 | - | - | 4/3 | 0/0 | 18.4 |
+| hi-mizoram-syllabus | healer-editable | ok | 0.989 | 1.000 | 0/36 | 287 | - | - | 2/3 | 0/0 | 6.9 |
+| hi-mizoram-syllabus | pdf2docx-plus | ok | 0.946 | 0.961 | 0/36 | 499 | - | - | 3/3 | 0/0 | 25.1 |
+| hi-mizoram-syllabus | libreoffice | ok | 0.249 | 0.252 | 36/36 | 0 | - | - | 0/3 | 0/0 | 36.4 |
+| us-patent-174465-scan | pdf2docx | ok | - | - | 0/0 | 0 | - | - | 0/0 | 6/6 | 1.9 |
+| us-patent-174465-scan | healer-fidelity | ok | - | - | 0/0 | 0 | - | - | 0/0 | 6/6 | 2.0 |
+| us-patent-174465-scan | healer-editable | ok | - | - | 0/0 | 0 | - | - | 0/0 | 6/6 | 1.2 |
+| us-patent-174465-scan | pdf2docx-plus | ok | - | - | 0/0 | 0 | - | - | 0/0 | 6/6 | 3.1 |
+| us-patent-174465-scan | libreoffice | ok | - | - | 0/0 | 0 | - | - | 0/0 | 6/6 | 6.4 |
+| wmil-financial-statements | pdf2docx | ok | 0.958 | 0.959 | 0/10 | 0 | - | - | 14/6 | 0/0 | 1.6 |
+| wmil-financial-statements | healer-fidelity | ok | 0.974 | 0.974 | 0/10 | 19 | - | - | 4/6 | 0/0 | 1.7 |
+| wmil-financial-statements | healer-editable | ok | 0.959 | 0.973 | 0/10 | 11 | - | - | 6/6 | 0/0 | 3.1 |
+| wmil-financial-statements | pdf2docx-plus | ok | 0.945 | 0.971 | 0/10 | 19 | - | - | 0/6 | 0/0 | 1.9 |
+| wmil-financial-statements | libreoffice | ok | 0.963 | 0.910 | 0/10 | 0 | - | - | 0/6 | 0/0 | 7.1 |
+| synthetic | pdf2docx | ok | 1.000 | 1.000 | 0/3 | 0 | 1.00 | 0.00 | 1/1 | 1/1 | 0.5 |
+| synthetic | healer-fidelity | ok | 1.000 | 1.000 | 0/3 | 19 | 1.00 | 1.00 | 1/1 | 1/1 | 0.7 |
+| synthetic | healer-editable | ok | 1.000 | 1.000 | 0/3 | 25 | 1.00 | 1.00 | 1/1 | 1/1 | 1.1 |
+| synthetic | pdf2docx-plus | ok | 0.983 | 0.983 | 0/3 | 17 | 1.00 | 0.00 | 1/1 | 1/1 | 1.0 |
+| synthetic | libreoffice | ok | 1.000 | 1.000 | 0/3 | 0 | 0.00 | 0.00 | 0/1 | 1/1 | 5.1 |

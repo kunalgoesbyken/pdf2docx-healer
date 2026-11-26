@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "pdf2docx-healer"
 dynamic = ["version"]
-description = "Formatting-preserving PDF-to-DOCX converter that fixes bullet lists, hyperlinks, CJK fonts, and scanned PDFs"
+description = "PDF to Word (DOCX) converter that keeps headings, real lists, links, tables and right-to-left text; a drop-in upgrade for pdf2docx"
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.10"
@@ -26,7 +26,7 @@ classifiers = [
     "Topic :: Text Processing",
     "Topic :: Office/Business :: Office Suites",
 ]
-keywords = ["pdf", "docx", "converter", "pdf-to-docx", "formatting", "hyperlink", "ocr", "cjk", "bullet-list"]
+keywords = ["pdf", "docx", "word", "converter", "pdf-to-docx", "pdf-to-word", "pdf2docx", "headings", "lists", "hyperlink", "ocr", "cjk", "rtl"]
 
 [project.optional-dependencies]
 dev = [
